@@ -3,6 +3,23 @@ browser.windows.getCurrent().then(win => {
   winId = win.id
 })
 
+class Tab {
+  /**
+ * Represents a browser tab.
+ * @constructor
+ * @param {number} id - The id of the tab
+ * @param {string} title - The title of the tab.
+ * @param {Tab} parent - The parent of the tab.
+ * @param {Tab[]} children - The children of the tab.
+ */
+  constructor(id, title, parent, children) {
+    this.id = id;
+    this.title = title;
+    this.parent = parent;
+    this.children = children;
+  }
+}
+
 let parentEl = document.querySelector('#sidebar');
 
 let tabs = [];
