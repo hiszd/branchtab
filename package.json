@@ -1,0 +1,31 @@
+{
+  "name": "branchtab",
+  "version": "0.0.1",
+  "description": "Firefox tree like tab bar",
+  "scripts": {
+    "build": "browserify ./sidebar/sidebar.ts -p [ tsify --noImplicitAny ] > ./sidebar/bundle.js",
+    "watch": "watchify ./sidebar/sidebar.ts -p [ tsify --noImplicitAny ] -o ./sidebar/bundle.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hiszd/branchtab.git"
+  },
+  "author": "Zion Koyl (hiszd1@gmail.com)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hiszd/branchtab/issues"
+  },
+  "homepage": "https://github.com/hiszd/branchtab#readme",
+  "dependencies": {
+    "browserify": "^17.0.0",
+    "tsc": "^2.0.4",
+    "tsify": "^5.0.4",
+    "watchify": "^4.0.0",
+    "webextension-polyfill": "^0.10.0"
+  },
+  "devDependencies": {
+    "@types/webextension-polyfill": "^0.10.7",
+    "typescript": "^5.4.2"
+  }
+}
