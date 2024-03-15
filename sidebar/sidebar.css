@@ -1,3 +1,8 @@
+* {
+  box-sizing: border-box;
+  transition: all 0.5s;
+}
+
 body {
   background-color: #303030;
   color: white;
@@ -5,12 +10,36 @@ body {
   margin: 0;
 }
 
+#sidebar {
+  width: 100%;
+  height: 100%;
+}
+
+.spacer > svg {
+  height: var(--size);
+  width: var(--size);
+}
+
+.spacer {
+  margin-right: calc(var(--size) / 2);
+}
+
+.labelwrapper {
+  line-height: 1.2rem;
+  --size: 1.2rem;
+  /* height: 0.25rem; */
+  display: flex;
+  flex-direction: row;
+  margin: 0;
+  padding: 0;
+}
+
 .tab {
   cursor: clickable;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem 0 0.4rem 0.5rem;
   margin: none;
   border-style: solid;
   border-width: 1px 0 0 0;
@@ -18,12 +47,17 @@ body {
 }
 
 .label {
-  background-color: hsla(0,0%,0%,1);
+  line-height: 1.2rem;
+  /* background-color: hsla(0, 0%, 0%, 1); */
   display: block;
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.label.haschild {
+  margin-bottom: 0.5rem;
 }
 
 .tab.active {

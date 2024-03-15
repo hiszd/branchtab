@@ -1,233 +1,196 @@
 import browser from "webextension-polyfill";
 
-let winId = async () => {
-  let win = await browser.windows.getCurrent()
-  return win.id;
-};
+let hasInit = false;
 
-let activeTab: { id: number; title: string; } | undefined = undefined;
-
-class TabArray {
-  constructor(children: Tab[]) {
-    this.children = children || [];
+// NOTE: just for testing
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log("sidebar init");
+  let b = await browser.tabs.query({ url: browser.runtime.getURL("sidebar/sidebar.html") })
+  if (b.length <= 0) {
+    browser.tabs.create({ url: browser.runtime.getURL("sidebar/sidebar.html") });
   }
-  children: Tab[];
+  if (!hasInit) {
+    browser.tabs.onActivated.addListener(TABS.activated);
+    browser.tabs.onCreated.addListener(TABS.created);
+    browser.tabs.onRemoved.addListener(TABS.removed);
+    hasInit = true;
+  }
+});
+
+class TabMap {
+  #tabs: Map<number, Tab> = new Map();
+  #storageKey: string = '';
+  activeTab: { id: number, title: string } | undefined;
+  #element: HTMLDivElement = document.querySelector('#sidebar')!;
+  constructor() {
+    this.winId().then(e => {
+      this.#storageKey = "tabs-" + e;
+    });
+    this.#getCache().then(e => {
+      if (e[this.#storageKey]) {
+        this.#tabs = e[this.#storageKey];
+      } else {
+        browser.windows.getCurrent({ populate: true }).then((win) => {
+          win.tabs!.forEach((tab) => {
+            let tb = new Tab(tab.id!, tab.title!);
+            if (tab.active) {
+              this.activeTab = {
+                id: tab.id!,
+                title: tab.title!,
+              }
+              tb.changeActive(true);
+            }
+            this.#tabs.set(tab.id!, tb);
+          });
+          this.#updateCache();
+          this.#initUI();
+        });
+      }
+    });
+  }
+  // NOTE: PRIVATE Methods
+  #updateCache = () => {
+    browser.storage.local.set({ [this.#storageKey]: this.#tabs });
+  }
+  #getCache = async () => {
+    let b = await browser.storage.local.get(this.#storageKey);
+    console.log("cache: ", b);
+    return b;
+  }
+  #initUI = () => {
+    this.#element.innerHTML = '';
+    this.#tabs.forEach((tab) => {
+      this.#element.appendChild(tab.element);
+    });
+  }
+  // NOTE: PUBLIC Methods
   add = (tab: Tab) => {
-    this.children.push(tab);
+    this.#element.appendChild(tab.element);
+    this.#tabs.set(tab.id, tab);
+    this.#updateCache();
   }
-  remove = (tabId: number) => {
-    let t = this.get(tabId);
-    if (t) {
-      t.getElement().remove();
-      this.children = this.children.filter((e) => e.id !== tabId);
-    } else {
-      console.log("tab not found: ", tabId);
-    }
+  remove = (id: number) => {
+    let tab = this.get(id)!;
+    tab.element.remove();
+    this.#tabs.delete(id);
   }
   get = (id: number) => {
-    return this.children.find((e) => e.id === id);
+    return this.#tabs.get(id);
+  }
+  has = (id: number) => {
+    return this.#tabs.has(id);
+  }
+  get length() {
+    return this.#tabs.size;
+  }
+  winId = async () => {
+    let win = await browser.windows.getCurrent()
+    return win.id;
+  };
+  // NOTE: listener callbacks
+  created = (tab: browser.Tabs.Tab) => {
+    let tb = new Tab(tab.id!, tab.title!);
+    this.add(tb);
+  }
+  removed = (tabId: number, removeInfo: browser.Tabs.OnRemovedRemoveInfoType) => {
+    if (this.get(tabId)) {
+      this.remove(tabId);
+    }
+  }
+  activated = (activeInfo: browser.Tabs.OnActivatedActiveInfoType) => {
+    if (activeInfo.tabId) {
+      let tab = this.get(activeInfo.tabId)!;
+      this.activeTab = {
+        id: tab.id,
+        title: tab.title,
+      }
+      this.#tabs.forEach((tb) => {
+        if (tb.id == tab.id) {
+          tb.changeActive(true);
+        } else {
+          tb.changeActive(false);
+        }
+      });
+    }
   }
 }
 
 class Tab {
-  constructor(id: number, title: string, parent: number | undefined, children: number[]) {
-    this.id = id;
-    this.title = title;
-    this.parent = parent;
-    this.children = children || [];
-    winId().then(winId_local => {
-      browser.tabs.onUpdated.addListener(this.updateElement, { tabId: this.id, windowId: winId_local, properties: ['title'] });
-    });
-  }
   id: number;
   title: string;
-  parent: number | undefined;
-  children: number[];
-  _element: HTMLDivElement | undefined;
-  getElement = (): HTMLDivElement => {
-    if (this._element) {
-      return document.getElementById(this._element.id) as HTMLDivElement;
-    } else {
-      let wrapper = document.createElement('div');
-      wrapper.id = "p" + this.id.toString();
-      let label = document.createElement('div');
-      label.className = 'label';
-      label.textContent = this.title;
-      let children = this.genChildrenElement();
-      if (this.id === activeTab?.id) {
-        wrapper.className = 'tab active';
-      } else {
-        wrapper.className = 'tab';
-      }
-      wrapper.appendChild(label);
-      wrapper.appendChild(children);
-      wrapper.addEventListener('click', () => {
-        console.log("click", this.id);
-        console.log(this.children);
-        // browser.tabs.update(this.id, { active: true });
-      });
-      this._element = wrapper;
-      return wrapper;
-    }
+  parentId: number | undefined;
+  children: number[] = [];
+  #element: HTMLDivElement = document.createElement('div');
+  #spacer: HTMLDivElement = document.createElement('div');
+  #title: HTMLDivElement = document.createElement('div');
+  #children: HTMLDivElement = document.createElement('div');
+  constructor(id: number, title: string, parentId?: number) {
+    this.id = id;
+    this.title = title;
+    this.parentId = parentId || undefined;
+    TABS.winId().then(winId_local => {
+      browser.tabs.onUpdated.addListener(this.#updateElement, { tabId: this.id, windowId: winId_local, properties: ['title'] });
+    });
   }
-  genChildrenElement = (): HTMLDivElement => {
-    console.log("genChildrenElement", this.children);
-    let children = document.createElement('div');
-    children.className = 'children';
+  // NOTE: PRIVATE Methods
+  // WARN: this updates the whole element as of now. Might change to seperate update methods for title, children, etc.
+  #updateElement = () => {
+    this.#element.id = "p" + this.id.toString();
+    this.#element.className = "tab";
+    this.#element.onclick = () => {
+      console.log("clicked");
+      console.log(this.id, (this.children.length > 0) ? ("has children: " + this.children) : "does not have children");
+      // browser.tabs.update(this.id, { active: true });
+    };
+    let wrapper = document.createElement('div');
+    wrapper.className = 'labelwrapper';
+
+    let spcrcontents = document.querySelector('#arrow')?.innerHTML;
+    this.#spacer.className = 'spacer';
+    this.#spacer.innerHTML = spcrcontents!;
+
+    this.#title.className = 'label';
+    this.#title.textContent = this.title;
+
+    this.#children.className = 'children';
     this.children.forEach((e) => {
-      if (tabs) {
-        let t = tabs.get(e);
-        if (t) {
-          children.appendChild(t.getElement());
-        }
+      if (TABS.has(e)) {
+        this.#children.appendChild(TABS.get(e)!.element);
       }
     });
-    return children;
-  }
-  updateChildren = () => {
-    if (this._element) {
-      let ce = this.genChildrenElement();
-      let el = this.getElement().querySelector('.children')
-      console.log("replacing", el);
-      if (el) {
-        el.replaceWith(ce);
-      }
-    } else {
-      console.error("No element found: ", this.id);
+
+    if (this.parentId) {
+      wrapper.appendChild(this.#spacer);
     }
+    wrapper.appendChild(this.#title);
+    this.#element.appendChild(wrapper);
+    this.#element.appendChild(this.#children);
   }
-  updateElement = (_tabId: number, changeInfo: browser.Tabs.OnUpdatedChangeInfoType) => {
-    if (changeInfo.title) {
-      this.title = changeInfo.title;
-      this.getElement().textContent = this.title;
-    }
+  // NOTE: PUBLIC Methods
+  get element() {
+    this.#updateElement();
+    return this.#element;
   }
-  addChild = (tabId: number): number[] => {
-    console.log("adding child", tabId, "to", this.id);
+  addChild = (tabId: number) => {
+    // NOTE: adds the item from this.children, but not to the DOM
     this.children.push(tabId);
-    this.updateChildren();
-    return this.children;
   }
   removeChild = (tabId: number) => {
-    if (this.getChild(tabId)) {
-      console.log("removing child", tabId);
-      this.children = this.children.filter((e) => e !== tabId);
-      this.updateChildren();
-    }
+    // NOTE: removes the item from this.children, but not from the DOM
+    this.children = this.children.filter((e) => e !== tabId);
   }
-  getChild = (id: number): number | undefined => {
+  getChild = (id: number) => {
     return this.children.find((e) => e === id);
   }
-}
-
-let parentEl = document.querySelector('#sidebar')!;
-
-let previouslyActiveTab: { id: number; title: string; } | undefined = undefined;
-
-let tabs: TabArray = new TabArray([]);
-
-const initUI = async () => {
-  if (tabs.children.length === 0) {
-    browser.windows.getCurrent({ populate: true }).then(win => {
-      win.tabs?.forEach(tab => {
-        if (tab.active) {
-          activeTab = {
-            id: tab.id!,
-            title: tab.title!,
-          }
-        }
-        tabs.add(new Tab(tab.id!, tab.title!, undefined, []));
-        parentEl.appendChild(tabs.get(tab.id!)!.getElement());
-      })
-    })
-  }
-}
-
-const changeActive = async (activeInfo: browser.Tabs.OnActivatedActiveInfoType) => {
-  let { tabId, previousTabId, windowId } = activeInfo;
-  if (windowId !== await winId()) {
-    return;
-  }
-  let comp = {
-    atid: activeTab!.id,
-    paid: previouslyActiveTab?.id,
-    tid: tabId,
-    ptid: previousTabId,
-  }
-  if (activeTab!.id !== previousTabId) {
-    if (activeTab!.id === tabId) {
-      console.log("Weird.... ", comp);
+  changeActive = (b: boolean) => {
+    if (b) {
+      this.#element.classList.add('active');
+      console.log("active: ", this.#element);
     } else {
-      console.log("failure and disappointment", comp);
+      this.#element.classList.remove('active');
+      console.log("inactive active: ", this.#element);
     }
-  }
-  previouslyActiveTab = activeTab;
-  browser.tabs.get(tabId).then(tb => {
-    activeTab = {
-      id: tb.id!,
-      title: tb.title!,
-    }
-  }).catch(e => {
-    console.error(e);
-  });
-
-  tabs.children = tabs.children.map(e => {
-    if (e.id === tabId) {
-      e.getElement().className = 'tab active';
-    } else {
-      e.getElement().className = 'tab';
-    }
-    return e;
-  })
-}
-
-const addTab = async (tab: browser.Tabs.Tab) => {
-  if (tab.windowId !== await winId()) {
-    return;
-  }
-  console.log(activeTab, previouslyActiveTab);
-  let parent: Tab | undefined = undefined;
-  if (activeTab !== undefined) {
-    if (activeTab.id !== tab.id) {
-      parent = tabs.get(activeTab.id)!;
-      console.log("adding tab: ", tab.id, tab.title);
-      console.log("with parent: ", parent.id, parent.title);
-      let tb = new Tab(tab.id!, tab.title!, parent.id, []);
-      tabs.add(tb);
-      console.log("bobby: ", parent.addChild(tb.id));
-    } else if (previouslyActiveTab !== undefined) {
-      parent = tabs.get(previouslyActiveTab.id)!;
-      console.log("adding tab", tab.id, tab.title);
-      console.log("with parent: ", parent.id, parent.title);
-      let tb = new Tab(tab.id, tab.title!, parent.id, []);
-      tabs.add(tb);
-      console.log("damn it: ", parent.addChild(tb.id));
-    }
-  } else {
-    console.log("not sure here");
   }
 }
 
-const removeTab = async (tabId: number, removeInfo: browser.Tabs.OnRemovedRemoveInfoType) => {
-  let { windowId } = removeInfo;
-  if (windowId === await winId()) {
-    let el = parentEl.querySelector('#p' + tabId);
-    console.log(`removing tab ${tabId} ${el!.innerHTML}`);
-    tabs.remove(tabId);
-  }
-}
-
-let hasInit = false;
-
-// called when the DOM is loaded
-const init = async () => {
-  if (!hasInit) {
-    browser.tabs.onActivated.addListener(changeActive);
-    browser.tabs.onCreated.addListener(addTab);
-    browser.tabs.onRemoved.addListener(removeTab);
-    hasInit = true;
-    await initUI();
-  }
-}
-
-document.addEventListener('DOMContentLoaded', init);
+let TABS = new TabMap();
