@@ -1271,14 +1271,23 @@
 
 },{}],2:[function(require,module,exports){
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const webextension_polyfill_1 = __importDefault(require("webextension-polyfill"));
-let winId;
-webextension_polyfill_1.default.windows.getCurrent().then(win => {
-    winId = win.id;
+let winId = () => __awaiter(void 0, void 0, void 0, function* () {
+    let win = yield webextension_polyfill_1.default.windows.getCurrent();
+    return win.id;
 });
 let activeTab = undefined;
 class TabArray {
@@ -1309,7 +1318,9 @@ class Tab {
         this.parent = parent;
         this.children = children || [];
         this.updateElement = this.updateElement.bind(this);
-        webextension_polyfill_1.default.tabs.onUpdated.addListener(this.updateElement, { tabId: this.id, windowId: winId, properties: ['title'] });
+        winId().then(winId_local => {
+            webextension_polyfill_1.default.tabs.onUpdated.addListener(this.updateElement, { tabId: this.id, windowId: winId_local, properties: ['title'] });
+        });
     }
     get element() {
         if (this._element) {
@@ -1324,12 +1335,17 @@ class Tab {
             let children = document.createElement('div');
             children.className = 'children';
             this.children.forEach((e) => {
-                if (tabs) {
-                    let t = tabs.get(e);
-                    if (t) {
-                        children.appendChild(t.element);
-                    }
-                }
+                // if (tabs) {
+                let el = document.createElement('div');
+                el.id = e.toString();
+                el.className = 'tab';
+                el.textContent = e.toString();
+                children.appendChild(el);
+                // let t = tabs.get(e);
+                // if (t) {
+                //   children.appendChild(t.element);
+                // }
+                // }
             });
             if (this.id === (activeTab === null || activeTab === void 0 ? void 0 : activeTab.id)) {
                 wrapper.className = 'tab active';
@@ -1340,11 +1356,30 @@ class Tab {
             wrapper.appendChild(label);
             wrapper.appendChild(children);
             wrapper.addEventListener('click', () => {
-                webextension_polyfill_1.default.tabs.update(this.id, { active: true });
+                console.log("click", this.id);
+                console.log(this.children);
+                // browser.tabs.update(this.id, { active: true });
             });
             this._element = wrapper;
             return wrapper;
         }
+    }
+    getChildrenElement() {
+        let children = document.createElement('div');
+        children.className = 'children';
+        this.children.forEach((e) => {
+            // if (tabs) {
+            let el = document.createElement('div');
+            el.id = e.toString();
+            el.className = 'tab';
+            el.textContent = e.toString();
+            children.appendChild(el);
+            // let t = tabs.get(e);
+            // if (t) {
+            //   children.appendChild(t.element);
+            // }
+            // }
+        });
     }
     updateElement(_tabId, changeInfo) {
         if (changeInfo.title) {
@@ -1368,104 +1403,109 @@ let parentEl = document.querySelector('#sidebar');
 let previouslyActiveTab = undefined;
 let tabs = new TabArray([]);
 function refreshUI() {
-    webextension_polyfill_1.default.tabs.query({ active: true, windowId: winId }).then(at => {
-        previouslyActiveTab = activeTab;
-        activeTab = {
-            id: at[0].id,
-            title: at[0].title,
-        };
-    });
-    webextension_polyfill_1.default.tabs.query({ windowId: winId }).then(tbs => {
-        tabs = new TabArray(tbs.map(tab => new Tab(tab.id, tab.title, undefined, [])));
-        parentEl.innerHTML = '';
-        for (let tab of tabs.children) {
-            if (tab.parent === undefined) {
-                let el = tab.element;
-                parentEl.appendChild(el);
+    return __awaiter(this, void 0, void 0, function* () {
+        webextension_polyfill_1.default.tabs.query({ active: true, windowId: yield winId() }).then(at => {
+            previouslyActiveTab = activeTab;
+            activeTab = {
+                id: at[0].id,
+                title: at[0].title,
+            };
+        });
+        webextension_polyfill_1.default.tabs.query({ windowId: yield winId() }).then(tbs => {
+            tabs = new TabArray(tbs.map(tab => new Tab(tab.id, tab.title, undefined, [])));
+            parentEl.innerHTML = '';
+            for (let tab of tabs.children) {
+                if (tab.parent === undefined) {
+                    let el = tab.element;
+                    parentEl.appendChild(el);
+                }
             }
-        }
+        });
     });
 }
 function changeActive(activeInfo) {
-    let { tabId, previousTabId, windowId } = activeInfo;
-    if (windowId !== winId) {
-        return;
-    }
-    let comp = {
-        atid: activeTab.id,
-        paid: previouslyActiveTab === null || previouslyActiveTab === void 0 ? void 0 : previouslyActiveTab.id,
-        tid: tabId,
-        ptid: previousTabId,
-    };
-    if (activeTab.id !== previousTabId) {
-        if (activeTab.id === tabId) {
-            console.log("Weird.... ", comp);
+    return __awaiter(this, void 0, void 0, function* () {
+        let { tabId, previousTabId, windowId } = activeInfo;
+        if (windowId !== (yield winId())) {
+            return;
         }
-        else {
-            console.log("failure and disappointment", comp);
-        }
-    }
-    previouslyActiveTab = activeTab;
-    webextension_polyfill_1.default.tabs.get(tabId).then(tb => {
-        activeTab = {
-            id: tb.id,
-            title: tb.title,
+        let comp = {
+            atid: activeTab.id,
+            paid: previouslyActiveTab === null || previouslyActiveTab === void 0 ? void 0 : previouslyActiveTab.id,
+            tid: tabId,
+            ptid: previousTabId,
         };
-    }).catch(e => {
-        console.error(e);
-    });
-    tabs = new TabArray(tabs.children.map(e => { e.element.className = 'tab'; return e; }));
-    let t = tabs.get(tabId);
-    if (t) {
-        t.element.className = 'tab active';
-    }
-}
-// @ts-ignore
-function getTab(id) {
-    let tab = tabs.get(id);
-    console.log(JSON.stringify(tab));
-}
-// @ts-ignore
-function listTabs() {
-    console.log(JSON.stringify(tabs.children));
-}
-function addTab(tab) {
-    if (tab.windowId !== winId) {
-        return;
-    }
-    console.log(activeTab, previouslyActiveTab);
-    let parent = undefined;
-    if (activeTab !== undefined) {
-        if (activeTab.id !== tab.id) {
-            parent = tabs.get(activeTab.id);
-            console.log("adding tab: ", tab.id, tab.title);
-            console.log("with parent: ", parent.id, parent.title);
-            let tb = new Tab(tab.id, tab.title, parent.id, []);
-            parent.addChild(tb.id);
-        }
-        else {
-            if (previouslyActiveTab !== undefined) {
-                parent = tabs.get(previouslyActiveTab.id);
-                console.log("adding tab", tab.id, tab.title);
-                console.log("with parent: ", parent.id, parent.title);
-                let tb = new Tab(tab.id, tab.title, parent.id, []);
-                tabs.add(tb);
-                parentEl.appendChild(tb.element);
+        if (activeTab.id !== previousTabId) {
+            if (activeTab.id === tabId) {
+                console.log("Weird.... ", comp);
+            }
+            else {
+                console.log("failure and disappointment", comp);
             }
         }
-    }
-    else {
-        console.log("not sure here");
-    }
-    tabs.add(new Tab(tab.id, tab.title, undefined, []));
+        previouslyActiveTab = activeTab;
+        webextension_polyfill_1.default.tabs.get(tabId).then(tb => {
+            activeTab = {
+                id: tb.id,
+                title: tb.title,
+            };
+        }).catch(e => {
+            console.error(e);
+        });
+        tabs = new TabArray(tabs.children.map(e => { e.element.className = 'tab'; return e; }));
+        let t = tabs.get(tabId);
+        if (t) {
+            t.element.className = 'tab active';
+        }
+    });
+}
+function addTab(tab) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (tab.windowId !== (yield winId())) {
+            return;
+        }
+        console.log(activeTab, previouslyActiveTab);
+        let parent = undefined;
+        if (activeTab !== undefined) {
+            if (activeTab.id !== tab.id) {
+                parent = tabs.get(activeTab.id);
+                console.log("adding tab: ", tab.id, tab.title);
+                console.log("with parent: ", parent.id, parent.title);
+                let tb = new Tab(tab.id, tab.title, parent.id, []);
+                parent.addChild(tb.id);
+            }
+            else {
+                if (previouslyActiveTab !== undefined) {
+                    parent = tabs.get(previouslyActiveTab.id);
+                    console.log("adding tab", tab.id, tab.title);
+                    console.log("with parent: ", parent.id, parent.title);
+                    let tb = new Tab(tab.id, tab.title, parent.id, []);
+                    tabs.add(tb);
+                    parentEl.appendChild(tb.element);
+                }
+            }
+        }
+        else {
+            console.log("not sure here");
+        }
+        tabs.add(new Tab(tab.id, tab.title, undefined, []));
+    });
 }
 function removeTab(tabId, removeInfo) {
-    let { windowId } = removeInfo;
-    if (windowId === winId) {
-        let el = parentEl.querySelector('#' + tabId);
-        console.log(`removing tab ${tabId} ${el.innerHTML}`);
-        tabs.remove(tabId);
-    }
+    return __awaiter(this, void 0, void 0, function* () {
+        let { windowId } = removeInfo;
+        if (windowId === (yield winId())) {
+            let el = parentEl.querySelector('#' + tabId);
+            if (el) {
+                el.remove();
+            }
+            else {
+                console.error("tab not found: ", tabId);
+            }
+            console.log(`removing tab ${tabId} ${el.innerHTML}`);
+            tabs.remove(tabId);
+        }
+    });
 }
 let hasInit = false;
 // called when the DOM is loaded

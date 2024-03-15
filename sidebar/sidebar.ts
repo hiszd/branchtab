@@ -36,7 +36,14 @@ class Tab {
     this.parent = parent;
     this.children = children || [];
     this.updateElement = this.updateElement.bind(this);
-    browser.tabs.onUpdated.addListener(this.updateElement, { tabId: this.id, windowId: winId, properties: ['title'] });
+    this.updateChildren = this.updateChildren.bind(this);
+    this.getChildrenElement = this.getChildrenElement.bind(this);
+    this.addChild = this.addChild.bind(this);
+    this.getChild = this.getChild.bind(this);
+    this.removeChild = this.removeChild.bind(this);
+    winId().then(winId_local => {
+      browser.tabs.onUpdated.addListener(this.updateElement, { tabId: this.id, windowId: winId_local, properties: ['title'] });
+    });
   }
   id: number;
   title: string;
@@ -48,20 +55,11 @@ class Tab {
       return this._element;
     } else {
       let wrapper = document.createElement('div');
-      wrapper.id = this.id.toString();
+      wrapper.id = "p" + this.id.toString();
       let label = document.createElement('div');
       label.className = 'label';
       label.textContent = this.title;
-      let children = document.createElement('div');
-      children.className = 'children';
-      this.children.forEach((e) => {
-        if (tabs) {
-          let t = tabs.get(e);
-          if (t) {
-            children.appendChild(t.element);
-          }
-        }
-      });
+      let children = this.getChildrenElement();
       if (this.id === activeTab?.id) {
         wrapper.className = 'tab active';
       } else {
@@ -70,10 +68,32 @@ class Tab {
       wrapper.appendChild(label);
       wrapper.appendChild(children);
       wrapper.addEventListener('click', () => {
-        browser.tabs.update(this.id, { active: true });
+        console.log("click", this.id);
+        console.log(this.children);
+        // browser.tabs.update(this.id, { active: true });
       });
       this._element = wrapper;
       return wrapper;
+    }
+  }
+  getChildrenElement(): HTMLDivElement {
+    let children = document.createElement('div');
+    children.className = 'children';
+    this.children.forEach((e) => {
+      if (tabs) {
+        let t = tabs.get(e);
+        if (t) {
+          children.appendChild(t.element);
+        }
+      }
+    });
+    return children;
+  }
+  updateChildren() {
+    if (this._element) {
+      this._element.replaceChild(this.getChildrenElement(), this._element.querySelector('.children')!);
+    } else {
+      console.error("No element found: ", this.id);
     }
   }
   updateElement(_tabId: number, changeInfo: browser.Tabs.OnUpdatedChangeInfoType) {
@@ -83,11 +103,15 @@ class Tab {
     }
   }
   addChild(tabId: number) {
+    console.log("adding child", tabId);
     this.children.push(tabId);
+    this.updateChildren();
   }
   removeChild(tabId: number) {
     if (this.getChild(tabId)) {
+      console.log("removing child", tabId);
       this.children = this.children.filter((e) => e !== tabId);
+      this.updateChildren();
     }
   }
   getChild(id: number): number | undefined {
@@ -101,15 +125,15 @@ let previouslyActiveTab: { id: number; title: string; } | undefined = undefined;
 
 let tabs: TabArray = new TabArray([]);
 
-function refreshUI() {
-  browser.tabs.query({ active: true, windowId: winId }).then(at => {
+async function refreshUI() {
+  browser.tabs.query({ active: true, windowId: await winId() }).then(at => {
     previouslyActiveTab = activeTab;
     activeTab = {
       id: at[0].id!,
       title: at[0].title!,
     };
   });
-  browser.tabs.query({ windowId: winId }).then(tbs => {
+  browser.tabs.query({ windowId: await winId() }).then(tbs => {
     tabs = new TabArray(tbs.map(tab => new Tab(tab.id!, tab.title!, undefined, [])));
     parentEl!.innerHTML = '';
     for (let tab of tabs.children) {
@@ -121,9 +145,9 @@ function refreshUI() {
   });
 }
 
-function changeActive(activeInfo: browser.Tabs.OnActivatedActiveInfoType) {
+async function changeActive(activeInfo: browser.Tabs.OnActivatedActiveInfoType) {
   let { tabId, previousTabId, windowId } = activeInfo;
-  if (windowId !== winId) {
+  if (windowId !== await winId()) {
     return;
   }
   let comp = {
@@ -156,19 +180,8 @@ function changeActive(activeInfo: browser.Tabs.OnActivatedActiveInfoType) {
   }
 }
 
-// @ts-ignore
-function getTab(id: number) {
-  let tab = tabs.get(id);
-  console.log(JSON.stringify(tab));
-}
-
-// @ts-ignore
-function listTabs() {
-  console.log(JSON.stringify(tabs.children));
-}
-
-function addTab(tab: browser.Tabs.Tab) {
-  if (tab.windowId !== winId) {
+async function addTab(tab: browser.Tabs.Tab) {
+  if (tab.windowId !== await winId()) {
     return;
   }
   console.log(activeTab, previouslyActiveTab);
@@ -196,10 +209,15 @@ function addTab(tab: browser.Tabs.Tab) {
   tabs.add(new Tab(tab.id!, tab.title!, undefined, []));
 }
 
-function removeTab(tabId: number, removeInfo: browser.Tabs.OnRemovedRemoveInfoType) {
+async function removeTab(tabId: number, removeInfo: browser.Tabs.OnRemovedRemoveInfoType) {
   let { windowId } = removeInfo;
-  if (windowId === winId) {
+  if (windowId === await winId()) {
     let el = parentEl!.querySelector('#' + tabId);
+    if (el) {
+      el.remove();
+    } else {
+      console.error("tab not found: ", tabId);
+    }
     console.log(`removing tab ${tabId} ${el!.innerHTML}`);
     tabs.remove(tabId);
   }
