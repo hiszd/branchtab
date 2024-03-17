@@ -1271,6 +1271,17 @@
 
 },{}],2:[function(require,module,exports){
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.selectOptionNames = exports.selectOptions = void 0;
+exports.selectOptions = {
+    "newtabbehavior": [{ id: "0", value: "Open as Child" }, { id: "1", value: "Open as Sibling" }],
+};
+exports.selectOptionNames = {
+    "newtabbehavior": "New Tab Behavior",
+};
+
+},{}],3:[function(require,module,exports){
+"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -1280,292 +1291,61 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
-var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-var _TabMap_tabs, _TabMap_storageKey, _TabMap_activeTab, _TabMap_lastActiveTab, _TabMap_element, _TabMap_updateCache, _TabMap_getCache, _TabMap_initUI, _Tab_element, _Tab_spacerEl, _Tab_titleEl, _Tab_childrenEl, _Tab_children, _Tab_childrenLast, _Tab_updateElement;
 Object.defineProperty(exports, "__esModule", { value: true });
 const webextension_polyfill_1 = __importDefault(require("webextension-polyfill"));
-let hasInit = false;
-document.addEventListener('DOMContentLoaded', () => __awaiter(void 0, void 0, void 0, function* () {
-    console.log("sidebar init");
-    // NOTE: just for testing
-    let b = yield webextension_polyfill_1.default.tabs.query({ url: webextension_polyfill_1.default.runtime.getURL("sidebar/sidebar.html") });
-    if (b.length <= 0) {
-        webextension_polyfill_1.default.tabs.create({ url: webextension_polyfill_1.default.runtime.getURL("sidebar/sidebar.html") });
-    }
-    let o = yield webextension_polyfill_1.default.tabs.query({ url: webextension_polyfill_1.default.runtime.getURL("options/options.html") });
-    if (o.length <= 0) {
-        webextension_polyfill_1.default.tabs.create({ url: webextension_polyfill_1.default.runtime.getURL("options/options.html") });
-    }
-    if (!hasInit) {
-        webextension_polyfill_1.default.tabs.onActivated.addListener(TABS.activated);
-        webextension_polyfill_1.default.tabs.onCreated.addListener(TABS.created);
-        webextension_polyfill_1.default.tabs.onRemoved.addListener(TABS.removed);
-        hasInit = true;
-    }
-}));
-class TabMap {
-    constructor() {
-        _TabMap_tabs.set(this, new Map());
-        _TabMap_storageKey.set(this, '');
-        _TabMap_activeTab.set(this, void 0);
-        _TabMap_lastActiveTab.set(this, void 0);
-        _TabMap_element.set(this, document.querySelector('#sidebar'));
-        // NOTE: PRIVATE Methods
-        _TabMap_updateCache.set(this, () => {
-            webextension_polyfill_1.default.storage.local.set({ [__classPrivateFieldGet(this, _TabMap_storageKey, "f")]: __classPrivateFieldGet(this, _TabMap_tabs, "f") });
-        });
-        _TabMap_getCache.set(this, () => __awaiter(this, void 0, void 0, function* () {
-            let b = yield webextension_polyfill_1.default.storage.local.get(__classPrivateFieldGet(this, _TabMap_storageKey, "f"));
-            console.log("cache: ", b);
-            return b;
-        }));
-        _TabMap_initUI.set(this, () => {
-            __classPrivateFieldGet(this, _TabMap_element, "f").innerHTML = '';
-            __classPrivateFieldGet(this, _TabMap_tabs, "f").forEach((tab) => {
-                __classPrivateFieldGet(this, _TabMap_element, "f").appendChild(tab.element);
-            });
+const option_types_1 = require("../option-types");
+let optionElements = document.querySelectorAll('input[type="text"]');
+let optionEl = document.querySelector('#options');
+Object.entries(option_types_1.selectOptions).map(e => {
+    let lbl = document.createElement('label');
+    lbl.innerHTML = option_types_1.selectOptionNames[e[0]];
+    let select = document.createElement('select');
+    select.id = e[0];
+    e[1].forEach(e => {
+        let option = document.createElement('option');
+        option.value = e.id;
+        option.innerHTML = e.value;
+        select.appendChild(option);
+    });
+    ;
+    optionEl === null || optionEl === void 0 ? void 0 : optionEl.appendChild(lbl);
+    optionEl === null || optionEl === void 0 ? void 0 : optionEl.appendChild(select);
+});
+function updateUI() {
+    return __awaiter(this, void 0, void 0, function* () {
+        for (let el of optionElements) {
+            let val = yield webextension_polyfill_1.default.storage.local.get(el.id);
+            el.value = val[el.id];
         }
-        // NOTE: PUBLIC Methods
-        );
-        // NOTE: PUBLIC Methods
-        this.add = (tab) => __awaiter(this, void 0, void 0, function* () {
-            __classPrivateFieldGet(this, _TabMap_tabs, "f").set(tab.id, tab);
-            let newtabbehavior = yield webextension_polyfill_1.default.storage.local.get('newtabbehavior');
-            let activeTab;
-            if (this.activeTab.id === tab.id) {
-                activeTab = this.get(__classPrivateFieldGet(this, _TabMap_lastActiveTab, "f").id);
-            }
-            else {
-                activeTab = this.get(this.activeTab.id);
-            }
-            switch (newtabbehavior['newtabbehavior']) {
-                case "0":
-                    tab.parentId = activeTab.id;
+        for (let el of optionEl === null || optionEl === void 0 ? void 0 : optionEl.querySelectorAll('select')) {
+            let val = yield webextension_polyfill_1.default.storage.local.get(el.id);
+            let options = el.querySelectorAll('option');
+            for (let option of options) {
+                if (option.value == val[el.id]) {
+                    option.selected = true;
                     break;
-                case "1":
-                    tab.parentId = activeTab.parentId;
-                    break;
-            }
-            if (tab.parentId !== undefined) {
-                let parent = this.get(tab.parentId);
-                parent.addChild(tab.id);
-                console.log("added", tab.id, "to", parent.id);
-            }
-            else {
-                __classPrivateFieldGet(this, _TabMap_element, "f").appendChild(tab.element);
-                __classPrivateFieldGet(this, _TabMap_tabs, "f").set(tab.id, tab);
-                console.log("added", tab.id, "to root");
-            }
-            __classPrivateFieldGet(this, _TabMap_updateCache, "f").call(this);
-        });
-        this.remove = (id) => {
-            let tab = this.get(id);
-            tab.remove();
-            __classPrivateFieldGet(this, _TabMap_tabs, "f").delete(id);
-        };
-        this.get = (id) => {
-            return __classPrivateFieldGet(this, _TabMap_tabs, "f").get(id);
-        };
-        this.has = (id) => {
-            return __classPrivateFieldGet(this, _TabMap_tabs, "f").has(id);
-        };
-        this.winId = () => __awaiter(this, void 0, void 0, function* () {
-            let win = yield webextension_polyfill_1.default.windows.getCurrent();
-            return win.id;
-        });
-        // NOTE: listener callbacks
-        this.created = (tab) => __awaiter(this, void 0, void 0, function* () {
-            let tb = new Tab(tab.id, tab.title);
-            if (tab.active) {
-                tb.changeActive(true);
-                yield this.add(tb);
-                this.activeTab = {
-                    id: tab.id,
-                    title: tab.title,
-                };
-            }
-            console.log("Created and active: ", tab.id, tab.title);
-        });
-        this.removed = (tabId, removeInfo) => {
-            let tab = this.get(tabId);
-            if (tab !== undefined) {
-                this.remove(tabId);
-                tab.remove();
-            }
-        };
-        this.activated = (activeInfo) => {
-            if (activeInfo.tabId) {
-                console.log("Activated: ", activeInfo.tabId);
-                let tab = this.get(activeInfo.tabId);
-                this.activeTab = {
-                    id: tab.id,
-                    title: tab.title,
-                };
-            }
-        };
-        this.winId().then(e => {
-            __classPrivateFieldSet(this, _TabMap_storageKey, "tabs-" + e, "f");
-        });
-        __classPrivateFieldGet(this, _TabMap_getCache, "f").call(this).then(e => {
-            if (e[__classPrivateFieldGet(this, _TabMap_storageKey, "f")]) {
-                __classPrivateFieldSet(this, _TabMap_tabs, e[__classPrivateFieldGet(this, _TabMap_storageKey, "f")], "f");
-            }
-            else {
-                webextension_polyfill_1.default.windows.getCurrent({ populate: true }).then((win) => {
-                    win.tabs.forEach((tab) => {
-                        let tb = new Tab(tab.id, tab.title);
-                        if (tab.active) {
-                            this.activeTab = {
-                                id: tab.id,
-                                title: tab.title,
-                            };
-                            tb.changeActive(true);
-                        }
-                        __classPrivateFieldGet(this, _TabMap_tabs, "f").set(tab.id, tb);
-                    });
-                    __classPrivateFieldGet(this, _TabMap_updateCache, "f").call(this);
-                    __classPrivateFieldGet(this, _TabMap_initUI, "f").call(this);
-                });
-            }
-        });
-    }
-    // NOTE: Getters and Setters
-    get length() {
-        return __classPrivateFieldGet(this, _TabMap_tabs, "f").size;
-    }
-    get activeTab() {
-        return __classPrivateFieldGet(this, _TabMap_activeTab, "f");
-    }
-    set activeTab(val) {
-        if (val) {
-            let tab = this.get(val.id);
-            if (tab) {
-                __classPrivateFieldSet(this, _TabMap_lastActiveTab, __classPrivateFieldGet(this, _TabMap_activeTab, "f"), "f");
-                __classPrivateFieldSet(this, _TabMap_activeTab, {
-                    id: tab.id,
-                    title: tab.title,
-                }, "f");
-                __classPrivateFieldGet(this, _TabMap_tabs, "f").forEach((tb) => {
-                    if (tb.id == tab.id) {
-                        tb.changeActive(true);
-                    }
-                    else {
-                        tb.changeActive(false);
-                    }
-                });
-            }
-            else {
-                console.error("Setting activeTab not possible: Tab not found ", val);
+                }
             }
         }
-    }
+    });
 }
-_TabMap_tabs = new WeakMap(), _TabMap_storageKey = new WeakMap(), _TabMap_activeTab = new WeakMap(), _TabMap_lastActiveTab = new WeakMap(), _TabMap_element = new WeakMap(), _TabMap_updateCache = new WeakMap(), _TabMap_getCache = new WeakMap(), _TabMap_initUI = new WeakMap();
-class Tab {
-    constructor(id, title, parentId) {
-        _Tab_element.set(this, document.createElement('div'));
-        _Tab_spacerEl.set(this, document.createElement('div'));
-        _Tab_titleEl.set(this, document.createElement('div'));
-        _Tab_childrenEl.set(this, document.createElement('div'));
-        _Tab_children.set(this, []);
-        _Tab_childrenLast.set(this, []);
-        // NOTE: PRIVATE Methods
-        // WARN: this updates the whole element as of now. Might change to seperate update methods for title, children, etc.
-        _Tab_updateElement.set(this, () => {
-            var _a;
-            console.log("Tab#updateElement", this.id);
-            __classPrivateFieldGet(this, _Tab_element, "f").innerHTML = "";
-            __classPrivateFieldGet(this, _Tab_element, "f").id = "p" + this.id.toString();
-            __classPrivateFieldGet(this, _Tab_element, "f").classList.add('tab');
-            __classPrivateFieldGet(this, _Tab_element, "f").onclick = () => {
-                console.log("clicked");
-                console.log(this.id, (__classPrivateFieldGet(this, _Tab_children, "f").length > 0) ? ("has children: " + __classPrivateFieldGet(this, _Tab_children, "f")) : "does not have children");
-                // browser.tabs.update(this.id, { active: true });
-            };
-            let wrapper = document.createElement('div');
-            wrapper.classList.add('labelwrapper');
-            let spcrcontents = (_a = document.querySelector('#arrow')) === null || _a === void 0 ? void 0 : _a.innerHTML;
-            __classPrivateFieldGet(this, _Tab_spacerEl, "f").classList.add('spacer');
-            __classPrivateFieldGet(this, _Tab_spacerEl, "f").innerHTML = spcrcontents;
-            __classPrivateFieldGet(this, _Tab_titleEl, "f").classList.add('label');
-            __classPrivateFieldGet(this, _Tab_titleEl, "f").textContent = this.title;
-            __classPrivateFieldGet(this, _Tab_childrenEl, "f").classList.add('children');
-            if (__classPrivateFieldGet(this, _Tab_children, "f") !== __classPrivateFieldGet(this, _Tab_childrenLast, "f")) {
-                __classPrivateFieldGet(this, _Tab_children, "f").forEach((e) => {
-                    if (TABS.has(e)) {
-                        __classPrivateFieldGet(this, _Tab_childrenEl, "f").appendChild(TABS.get(e).element);
-                    }
-                });
-                __classPrivateFieldSet(this, _Tab_childrenLast, __classPrivateFieldGet(this, _Tab_children, "f"), "f");
-            }
-            else {
-                console.log("same children", __classPrivateFieldGet(this, _Tab_children, "f"), __classPrivateFieldGet(this, _Tab_childrenLast, "f"));
-            }
-            if (this.parentId) {
-                wrapper.appendChild(__classPrivateFieldGet(this, _Tab_spacerEl, "f"));
-            }
-            wrapper.appendChild(__classPrivateFieldGet(this, _Tab_titleEl, "f"));
-            __classPrivateFieldGet(this, _Tab_element, "f").appendChild(wrapper);
-            __classPrivateFieldGet(this, _Tab_element, "f").appendChild(__classPrivateFieldGet(this, _Tab_childrenEl, "f"));
+function updateOptions() {
+    return __awaiter(this, void 0, void 0, function* () {
+        for (let el of optionElements) {
+            webextension_polyfill_1.default.storage.local.set({ [el.id]: el.value });
         }
-        // NOTE: PUBLIC Methods
-        );
-        this.remove = () => {
-            __classPrivateFieldGet(this, _Tab_element, "f").remove();
-            if (this.parentId) {
-                TABS.get(this.parentId).removeChild(this.id);
-            }
-            __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
-        };
-        this.addChild = (tabId) => {
-            __classPrivateFieldGet(this, _Tab_children, "f").push(tabId);
-            __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
-            console.log("Added child: ", tabId, "to", this.id);
-        };
-        this.removeChild = (tabId) => {
-            __classPrivateFieldSet(this, _Tab_children, __classPrivateFieldGet(this, _Tab_children, "f").filter((e) => e !== tabId), "f");
-            __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
-            console.log("Removed child: ", tabId, "from", this.id);
-        };
-        this.getChild = (id) => {
-            return __classPrivateFieldGet(this, _Tab_children, "f").find((e) => e === id);
-        };
-        this.changeActive = (b) => {
-            if (b) {
-                __classPrivateFieldGet(this, _Tab_element, "f").classList.add('active');
-            }
-            else {
-                __classPrivateFieldGet(this, _Tab_element, "f").classList.remove('active');
-            }
-        };
-        this.id = id;
-        this.title = title;
-        this.parentId = parentId || undefined;
-        TABS.winId().then(winId_local => {
-            webextension_polyfill_1.default.tabs.onUpdated.addListener(__classPrivateFieldGet(this, _Tab_updateElement, "f"), { tabId: this.id, windowId: winId_local, properties: ['title'] });
+        optionEl === null || optionEl === void 0 ? void 0 : optionEl.querySelectorAll('select').forEach(e => {
+            let val = e.options[e.selectedIndex].value;
+            let setval = { [e.id]: val };
+            console.log(setval);
+            webextension_polyfill_1.default.storage.local.set(setval);
         });
-        __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
-    }
-    // NOTE: PUBLIC Methods
-    get element() {
-        console.log("Tab#element", this.id);
-        return __classPrivateFieldGet(this, _Tab_element, "f");
-    }
+    });
 }
-_Tab_element = new WeakMap(), _Tab_spacerEl = new WeakMap(), _Tab_titleEl = new WeakMap(), _Tab_childrenEl = new WeakMap(), _Tab_children = new WeakMap(), _Tab_childrenLast = new WeakMap(), _Tab_updateElement = new WeakMap();
-let TABS = new TabMap();
+document.addEventListener('DOMContentLoaded', updateUI);
+document.querySelector('#update').addEventListener('click', updateOptions);
 
-},{"webextension-polyfill":1}]},{},[2]);
+},{"../option-types":2,"webextension-polyfill":1}]},{},[3]);

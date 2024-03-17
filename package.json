@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "description": "Firefox tree like tab bar",
   "scripts": {
-    "build": "browserify ./sidebar/sidebar.ts -p [ tsify --noImplicitAny ] > ./sidebar/bundle.js",
-    "watch": "watchify ./sidebar/sidebar.ts -p [ tsify --noImplicitAny ] -o ./sidebar/bundle.js",
+    "build": "browserify ./sidebar/sidebar.ts -p [ tsify --noImplicitAny ] > ./sidebar/bundle.js & browserify ./options/options.ts -p [ tsify --noImplicitAny ] > ./options/bundle.js",
+    "watch": "watchify ./sidebar/sidebar.ts -p [ tsify --noImplicitAny ] -o ./sidebar/bundle.js & watchify ./options/options.ts -p [ tsify --noImplicitAny ] -o ./options/bundle.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
