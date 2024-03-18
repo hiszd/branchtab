@@ -1,5 +1,10 @@
 import browser from "webextension-polyfill";
-import { selectOptions } from "../option-types";
+
+interface TabEssence {
+  id: number;
+  title: string;
+  parentId: number | undefined;
+}
 
 let hasInit = false;
 
@@ -7,11 +12,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log("sidebar init");
 
   // NOTE: just for testing
-  let b = await browser.tabs.query({ url: browser.runtime.getURL("sidebar/sidebar.html") })
+  const b = await browser.tabs.query({ url: browser.runtime.getURL("sidebar/sidebar.html") })
   if (b.length <= 0) {
     browser.tabs.create({ url: browser.runtime.getURL("sidebar/sidebar.html") });
   }
-  let o = await browser.tabs.query({ url: browser.runtime.getURL("options/options.html") })
+  const o = await browser.tabs.query({ url: browser.runtime.getURL("options/options.html") })
   if (o.length <= 0) {
     browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
   }
@@ -30,17 +35,29 @@ class TabMap {
   #activeTab: { id: number, title: string } | undefined;
   #lastActiveTab: { id: number, title: string } | undefined;
   #element: HTMLDivElement = document.querySelector('#sidebar')!;
+  // TODO: the cache needs to be loaded, compared with existing tabs, set parents of these tabs, and THEN render the UI
   constructor() {
     this.winId().then(e => {
       this.#storageKey = "tabs-" + e;
     });
     this.#getCache().then(e => {
-      if (e[this.#storageKey]) {
-        this.#tabs = e[this.#storageKey];
+      const at = browser.tabs.query({ active: true, currentWindow: true }).then(r => {
+        if (r.length > 0) {
+          this.activeTab = {
+            id: r[0].id!,
+            title: r[0].title!,
+          }
+        }
+      });
+      if (e) {
+        e.forEach((tab) => {
+          this.add(new Tab(tab.id, tab.title, tab.parentId));
+        });
+        this.#updateCache();
       } else {
         browser.windows.getCurrent({ populate: true }).then((win) => {
           win.tabs!.forEach((tab) => {
-            let tb = new Tab(tab.id!, tab.title!);
+            const tb = new Tab(tab.id!, tab.title!);
             if (tab.active) {
               this.activeTab = {
                 id: tab.id!,
@@ -58,12 +75,26 @@ class TabMap {
   }
   // NOTE: PRIVATE Methods
   #updateCache = () => {
-    browser.storage.local.set({ [this.#storageKey]: this.#tabs });
+    let tabEssences: TabEssence[] = [];
+    for (const value of this.#tabs.values()) {
+      tabEssences.push(value.distillEssence());
+    }
+    const cache = { [this.#storageKey]: JSON.stringify(tabEssences) };
+    console.log("set cache: ", cache);
+    browser.storage.local.set(cache).then(e => {
+      console.log("cache return: ", e);
+    }).catch(e => {
+      console.error("cache error: ", e);
+    });
   }
-  #getCache = async () => {
-    let b = await browser.storage.local.get(this.#storageKey);
-    console.log("cache: ", b);
-    return b;
+  #getCache = async (): Promise<TabEssence[] | undefined> => {
+    const b = await browser.storage.local.get(null);
+    if (b[this.#storageKey] === undefined) {
+      return undefined;
+    }
+    const cache = JSON.parse(b[this.#storageKey]);
+    console.log("get cache: ", cache);
+    return cache;
   }
   #initUI = () => {
     this.#element.innerHTML = '';
@@ -74,12 +105,20 @@ class TabMap {
   // NOTE: PUBLIC Methods
   add = async (tab: Tab) => {
     this.#tabs.set(tab.id, tab);
-    let newtabbehavior = await browser.storage.local.get('newtabbehavior');
+    const newtabbehavior = await browser.storage.local.get('newtabbehavior');
     let activeTab: Tab;
-    if (this.activeTab!.id === tab.id) {
-      activeTab = this.get(this.#lastActiveTab!.id)!;
+    if (this.activeTab && this.activeTab.id === tab.id) {
+      if (this.#lastActiveTab) {
+        activeTab = this.get(this.#lastActiveTab.id)!;
+      } else {
+        return;
+      }
     } else {
-      activeTab = this.get(this.activeTab!.id)!;
+      if (this.activeTab) {
+        activeTab = this.get(this.activeTab.id)!;
+      } else {
+        return;
+      }
     }
     switch (newtabbehavior['newtabbehavior']) {
       case "0":
@@ -90,7 +129,7 @@ class TabMap {
         break;
     }
     if (tab.parentId !== undefined) {
-      let parent = this.get(tab.parentId!)!;
+      const parent = this.get(tab.parentId!)!;
       parent.addChild(tab.id);
       console.log("added", tab.id, "to", parent.id);
     } else {
@@ -101,9 +140,10 @@ class TabMap {
     this.#updateCache();
   }
   remove = (id: number) => {
-    let tab = this.get(id)!;
+    const tab = this.get(id)!;
     tab.remove();
     this.#tabs.delete(id);
+    this.#updateCache();
   }
   get = (id: number) => {
     return this.#tabs.get(id);
@@ -112,7 +152,7 @@ class TabMap {
     return this.#tabs.has(id);
   }
   winId = async () => {
-    let win = await browser.windows.getCurrent()
+    const win = await browser.windows.getCurrent()
     return win.id;
   };
   // NOTE: Getters and Setters
@@ -124,7 +164,7 @@ class TabMap {
   }
   set activeTab(val: { id: number, title: string } | undefined) {
     if (val) {
-      let tab = this.get(val.id);
+      const tab = this.get(val.id);
       if (tab) {
         this.#lastActiveTab = this.#activeTab;
         this.#activeTab = {
@@ -145,7 +185,7 @@ class TabMap {
   }
   // NOTE: listener callbacks
   created = async (tab: browser.Tabs.Tab) => {
-    let tb = new Tab(tab.id!, tab.title!);
+    const tb = new Tab(tab.id!, tab.title!);
     if (tab.active) {
       tb.changeActive(true);
       await this.add(tb);
@@ -154,10 +194,9 @@ class TabMap {
         title: tab.title!,
       }
     }
-    console.log("Created and active: ", tab.id, tab.title);
   }
   removed = (tabId: number, removeInfo: browser.Tabs.OnRemovedRemoveInfoType) => {
-    let tab = this.get(tabId);
+    const tab = this.get(tabId);
     if (tab !== undefined) {
       this.remove(tabId);
       tab.remove();
@@ -165,8 +204,7 @@ class TabMap {
   }
   activated = (activeInfo: browser.Tabs.OnActivatedActiveInfoType) => {
     if (activeInfo.tabId) {
-      console.log("Activated: ", activeInfo.tabId);
-      let tab = this.get(activeInfo.tabId)!;
+      const tab = this.get(activeInfo.tabId)!;
       this.activeTab = {
         id: tab.id,
         title: tab.title,
@@ -200,18 +238,16 @@ class Tab {
   }
   // NOTE: PRIVATE Methods
   #updateElement = () => {
-    console.log("Tab#updateElement", this.id);
     this.#element.innerHTML = "";
     this.#element.id = "p" + this.id.toString();
     this.#element.classList.add('tab');
     this.#element.onclick = () => {
-      console.log("clicked");
       console.log(this.id, (this.#children.length > 0) ? ("has children: " + this.#children) : "does not have children");
       // browser.tabs.update(this.id, { active: true });
     };
     this.#wrapperEl.classList.add('labelwrapper');
 
-    let spcrcontents = document.querySelector('#arrow')?.innerHTML;
+    const spcrcontents = document.querySelector('#arrow')?.innerHTML;
     this.#spacerEl.classList.add('spacer');
     this.#spacerEl.innerHTML = spcrcontents!;
 
@@ -231,7 +267,7 @@ class Tab {
       console.log("same children", this.#children, this.#childrenLast);
     }
     this.#children.forEach((e) => {
-      let tab = TABS.get(e);
+      const tab = TABS.get(e);
       if (tab) {
         this.#childrenEl.appendChild(tab.element);
       }
@@ -244,7 +280,6 @@ class Tab {
   }
   // NOTE: PUBLIC Methods
   get element() {
-    console.log("Tab#element", this.id);
     return this.#element;
   }
   remove = () => {
@@ -274,6 +309,13 @@ class Tab {
       this.#element.classList.remove('active');
     }
   }
+  distillEssence = (): TabEssence => {
+    return {
+      id: this.id,
+      title: this.title,
+      parentId: this.parentId,
+    }
+  }
   // NOTE: Listeners
   #updated = (tabId: number, changeInfo: browser.Tabs.OnUpdatedChangeInfoType, tab: browser.Tabs.Tab) => {
     if (changeInfo.title) {
@@ -283,4 +325,4 @@ class Tab {
   }
 }
 
-let TABS = new TabMap();
+const TABS = new TabMap();
