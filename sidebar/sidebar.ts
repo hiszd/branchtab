@@ -6,6 +6,12 @@ interface TabEssence {
   parentId: number | undefined;
 }
 
+interface TabEssence {
+  id: number;
+  title: string;
+  parentId: number | undefined;
+}
+
 let hasInit = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
