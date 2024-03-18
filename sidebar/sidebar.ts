@@ -3,13 +3,8 @@ import browser from "webextension-polyfill";
 interface TabEssence {
   id: number;
   title: string;
-  parentId: number | undefined;
-}
-
-interface TabEssence {
-  id: number;
-  title: string;
-  parentId: number | undefined;
+  url: string;
+  parentUrl: string | undefined;
 }
 
 let hasInit = false;
@@ -41,13 +36,12 @@ class TabMap {
   #activeTab: { id: number, title: string } | undefined;
   #lastActiveTab: { id: number, title: string } | undefined;
   #element: HTMLDivElement = document.querySelector('#sidebar')!;
-  // TODO: the cache needs to be loaded, compared with existing tabs, set parents of these tabs, and THEN render the UI
+  winId = browser.windows.WINDOW_ID_CURRENT;
+  // TODO: the cache needs to be loaded, compared with existing tabs, set parents of these tabs, THEN render the UI
   constructor() {
-    this.winId().then(e => {
-      this.#storageKey = "tabs-" + e;
-    });
+    this.#storageKey = "tabs-" + this.winId.toString();
     this.#getCache().then(e => {
-      const at = browser.tabs.query({ active: true, currentWindow: true }).then(r => {
+      browser.tabs.query({ active: true, currentWindow: true }).then(r => {
         if (r.length > 0) {
           this.activeTab = {
             id: r[0].id!,
@@ -56,14 +50,23 @@ class TabMap {
         }
       });
       if (e) {
-        e.forEach((tab) => {
-          this.add(new Tab(tab.id, tab.title, tab.parentId));
+        browser.windows.getCurrent({ populate: true }).then(w => {
+          e.forEach((tab) => {
+            // NOTE: find the tab in the window based on the url
+            // WARN: not sure if the ID of the window is the same after restart
+            let umatch = w.tabs!.find(t => t.url === tab.url);
+            if (umatch) {
+              let parent = w.tabs!.find(t => t.url === tab.parentUrl);
+              this.#tabs.set(umatch.id!, new Tab(umatch.id!, umatch.title!, umatch.url!, parent?.id!));
+            }
+          });
+          this.#updateCache();
+          this.#initUI();
         });
-        this.#updateCache();
       } else {
         browser.windows.getCurrent({ populate: true }).then((win) => {
           win.tabs!.forEach((tab) => {
-            const tb = new Tab(tab.id!, tab.title!);
+            const tb = new Tab(tab.id!, tab.title!, tab.url!);
             if (tab.active) {
               this.activeTab = {
                 id: tab.id!,
@@ -87,9 +90,7 @@ class TabMap {
     }
     const cache = { [this.#storageKey]: JSON.stringify(tabEssences) };
     console.log("set cache: ", cache);
-    browser.storage.local.set(cache).then(e => {
-      console.log("cache return: ", e);
-    }).catch(e => {
+    browser.storage.local.set(cache).catch(e => {
       console.error("cache error: ", e);
     });
   }
@@ -105,6 +106,13 @@ class TabMap {
   #initUI = () => {
     this.#element.innerHTML = '';
     this.#tabs.forEach((tab) => {
+      if (tab.parentId !== undefined) {
+        const parent = this.#tabs.get(tab.parentId);
+        if (parent !== undefined) {
+          console.error("Parent not found: ", tab.id, parent.id);
+        }
+        parent!.addChild(tab.id);
+      }
       this.#element.appendChild(tab.element);
     });
   }
@@ -157,10 +165,6 @@ class TabMap {
   has = (id: number) => {
     return this.#tabs.has(id);
   }
-  winId = async () => {
-    const win = await browser.windows.getCurrent()
-    return win.id;
-  };
   // NOTE: Getters and Setters
   get length() {
     return this.#tabs.size;
@@ -191,7 +195,7 @@ class TabMap {
   }
   // NOTE: listener callbacks
   created = async (tab: browser.Tabs.Tab) => {
-    const tb = new Tab(tab.id!, tab.title!);
+    const tb = new Tab(tab.id!, tab.title!, tab.url!);
     if (tab.active) {
       tb.changeActive(true);
       await this.add(tb);
@@ -223,7 +227,7 @@ class Tab {
   id: number;
   title: string;
   parentId: number | undefined;
-  activeTab: { id: number, title: string } | undefined;
+  url: string;
   #element: HTMLDivElement = document.createElement('div');
   #wrapperEl: HTMLDivElement = document.createElement('div');
   #spacerEl: HTMLDivElement = document.createElement('div');
@@ -231,13 +235,12 @@ class Tab {
   #childrenEl: HTMLDivElement = document.createElement('div');
   #children: number[] = [];
   #childrenLast: number[] = [];
-  constructor(id: number, title: string, parentId?: number) {
+  constructor(id: number, title: string, url: string, parentId?: number) {
     this.id = id;
     this.title = title;
     this.parentId = parentId || undefined;
-    TABS.winId().then(winId_local => {
-      browser.tabs.onUpdated.addListener(this.#updated, { tabId: this.id, windowId: winId_local, properties: ['title'] });
-    });
+    this.url = url;
+    browser.tabs.onUpdated.addListener(this.#updated, { tabId: this.id, windowId: browser.windows.WINDOW_ID_CURRENT, properties: ["title", "url"] });
     this.#updateElement();
     this.#updateTitleElement();
     this.#updateChildrenElement();
@@ -296,11 +299,17 @@ class Tab {
     this.#updateElement();
   }
   addChild = (tabId: number) => {
+    if (this.#children.includes(tabId)) {
+      return;
+    }
     this.#children.push(tabId);
     this.#updateChildrenElement();
     console.log("Added child: ", tabId, "to", this.id);
   }
   removeChild = (tabId: number) => {
+    if (!this.#children.includes(tabId)) {
+      return;
+    }
     this.#children = this.#children.filter((e) => e !== tabId);
     this.#updateChildrenElement();
     console.log("Removed child: ", tabId, "from", this.id);
@@ -319,14 +328,20 @@ class Tab {
     return {
       id: this.id,
       title: this.title,
-      parentId: this.parentId,
+      url: this.url,
+      parentUrl: this.parentId ? TABS.get(this.parentId)!.url : undefined,
     }
   }
   // NOTE: Listeners
   #updated = (tabId: number, changeInfo: browser.Tabs.OnUpdatedChangeInfoType, tab: browser.Tabs.Tab) => {
     if (changeInfo.title) {
+      console.log("tab updated", tabId, changeInfo.title);
       this.title = tab.title!;
       this.#updateTitleElement();
+    }
+    if (changeInfo.url) {
+      console.log("tab updated", tabId, changeInfo.url);
+      this.url = tab.url!;
     }
   }
 }
