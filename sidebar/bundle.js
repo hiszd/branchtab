@@ -1294,7 +1294,7 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-var _TabMap_tabs, _TabMap_storageKey, _TabMap_activeTab, _TabMap_lastActiveTab, _TabMap_element, _TabMap_updateCache, _TabMap_getCache, _TabMap_initUI, _Tab_element, _Tab_spacerEl, _Tab_titleEl, _Tab_childrenEl, _Tab_children, _Tab_childrenLast, _Tab_updateElement;
+var _TabMap_tabs, _TabMap_storageKey, _TabMap_activeTab, _TabMap_lastActiveTab, _TabMap_element, _TabMap_updateCache, _TabMap_getCache, _TabMap_initUI, _Tab_element, _Tab_wrapperEl, _Tab_spacerEl, _Tab_titleEl, _Tab_childrenEl, _Tab_children, _Tab_childrenLast, _Tab_updateElement, _Tab_updateChildrenElement, _Tab_updateTitleElement, _Tab_updated;
 Object.defineProperty(exports, "__esModule", { value: true });
 const webextension_polyfill_1 = __importDefault(require("webextension-polyfill"));
 let hasInit = false;
@@ -1477,13 +1477,13 @@ _TabMap_tabs = new WeakMap(), _TabMap_storageKey = new WeakMap(), _TabMap_active
 class Tab {
     constructor(id, title, parentId) {
         _Tab_element.set(this, document.createElement('div'));
+        _Tab_wrapperEl.set(this, document.createElement('div'));
         _Tab_spacerEl.set(this, document.createElement('div'));
         _Tab_titleEl.set(this, document.createElement('div'));
         _Tab_childrenEl.set(this, document.createElement('div'));
         _Tab_children.set(this, []);
         _Tab_childrenLast.set(this, []);
         // NOTE: PRIVATE Methods
-        // WARN: this updates the whole element as of now. Might change to seperate update methods for title, children, etc.
         _Tab_updateElement.set(this, () => {
             var _a;
             console.log("Tab#updateElement", this.id);
@@ -1495,31 +1495,36 @@ class Tab {
                 console.log(this.id, (__classPrivateFieldGet(this, _Tab_children, "f").length > 0) ? ("has children: " + __classPrivateFieldGet(this, _Tab_children, "f")) : "does not have children");
                 // browser.tabs.update(this.id, { active: true });
             };
-            let wrapper = document.createElement('div');
-            wrapper.classList.add('labelwrapper');
+            __classPrivateFieldGet(this, _Tab_wrapperEl, "f").classList.add('labelwrapper');
             let spcrcontents = (_a = document.querySelector('#arrow')) === null || _a === void 0 ? void 0 : _a.innerHTML;
             __classPrivateFieldGet(this, _Tab_spacerEl, "f").classList.add('spacer');
             __classPrivateFieldGet(this, _Tab_spacerEl, "f").innerHTML = spcrcontents;
-            __classPrivateFieldGet(this, _Tab_titleEl, "f").classList.add('label');
-            __classPrivateFieldGet(this, _Tab_titleEl, "f").textContent = this.title;
+            if (this.parentId) {
+                __classPrivateFieldGet(this, _Tab_wrapperEl, "f").appendChild(__classPrivateFieldGet(this, _Tab_spacerEl, "f"));
+            }
+            __classPrivateFieldGet(this, _Tab_wrapperEl, "f").appendChild(__classPrivateFieldGet(this, _Tab_titleEl, "f"));
+            __classPrivateFieldGet(this, _Tab_element, "f").appendChild(__classPrivateFieldGet(this, _Tab_wrapperEl, "f"));
+            __classPrivateFieldGet(this, _Tab_element, "f").appendChild(__classPrivateFieldGet(this, _Tab_childrenEl, "f"));
+        });
+        _Tab_updateChildrenElement.set(this, () => {
             __classPrivateFieldGet(this, _Tab_childrenEl, "f").classList.add('children');
             if (__classPrivateFieldGet(this, _Tab_children, "f") !== __classPrivateFieldGet(this, _Tab_childrenLast, "f")) {
-                __classPrivateFieldGet(this, _Tab_children, "f").forEach((e) => {
-                    if (TABS.has(e)) {
-                        __classPrivateFieldGet(this, _Tab_childrenEl, "f").appendChild(TABS.get(e).element);
-                    }
-                });
-                __classPrivateFieldSet(this, _Tab_childrenLast, __classPrivateFieldGet(this, _Tab_children, "f"), "f");
+                console.log("new children", __classPrivateFieldGet(this, _Tab_children, "f"), __classPrivateFieldGet(this, _Tab_childrenLast, "f"));
             }
             else {
                 console.log("same children", __classPrivateFieldGet(this, _Tab_children, "f"), __classPrivateFieldGet(this, _Tab_childrenLast, "f"));
             }
-            if (this.parentId) {
-                wrapper.appendChild(__classPrivateFieldGet(this, _Tab_spacerEl, "f"));
-            }
-            wrapper.appendChild(__classPrivateFieldGet(this, _Tab_titleEl, "f"));
-            __classPrivateFieldGet(this, _Tab_element, "f").appendChild(wrapper);
-            __classPrivateFieldGet(this, _Tab_element, "f").appendChild(__classPrivateFieldGet(this, _Tab_childrenEl, "f"));
+            __classPrivateFieldGet(this, _Tab_children, "f").forEach((e) => {
+                let tab = TABS.get(e);
+                if (tab) {
+                    __classPrivateFieldGet(this, _Tab_childrenEl, "f").appendChild(tab.element);
+                }
+            });
+            __classPrivateFieldSet(this, _Tab_childrenLast, __classPrivateFieldGet(this, _Tab_children, "f"), "f");
+        });
+        _Tab_updateTitleElement.set(this, () => {
+            __classPrivateFieldGet(this, _Tab_titleEl, "f").classList.add('label');
+            __classPrivateFieldGet(this, _Tab_titleEl, "f").textContent = this.title;
         }
         // NOTE: PUBLIC Methods
         );
@@ -1532,12 +1537,12 @@ class Tab {
         };
         this.addChild = (tabId) => {
             __classPrivateFieldGet(this, _Tab_children, "f").push(tabId);
-            __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
+            __classPrivateFieldGet(this, _Tab_updateChildrenElement, "f").call(this);
             console.log("Added child: ", tabId, "to", this.id);
         };
         this.removeChild = (tabId) => {
             __classPrivateFieldSet(this, _Tab_children, __classPrivateFieldGet(this, _Tab_children, "f").filter((e) => e !== tabId), "f");
-            __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
+            __classPrivateFieldGet(this, _Tab_updateChildrenElement, "f").call(this);
             console.log("Removed child: ", tabId, "from", this.id);
         };
         this.getChild = (id) => {
@@ -1551,13 +1556,22 @@ class Tab {
                 __classPrivateFieldGet(this, _Tab_element, "f").classList.remove('active');
             }
         };
+        // NOTE: Listeners
+        _Tab_updated.set(this, (tabId, changeInfo, tab) => {
+            if (changeInfo.title) {
+                this.title = tab.title;
+                __classPrivateFieldGet(this, _Tab_updateTitleElement, "f").call(this);
+            }
+        });
         this.id = id;
         this.title = title;
         this.parentId = parentId || undefined;
         TABS.winId().then(winId_local => {
-            webextension_polyfill_1.default.tabs.onUpdated.addListener(__classPrivateFieldGet(this, _Tab_updateElement, "f"), { tabId: this.id, windowId: winId_local, properties: ['title'] });
+            webextension_polyfill_1.default.tabs.onUpdated.addListener(__classPrivateFieldGet(this, _Tab_updated, "f"), { tabId: this.id, windowId: winId_local, properties: ['title'] });
         });
         __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
+        __classPrivateFieldGet(this, _Tab_updateTitleElement, "f").call(this);
+        __classPrivateFieldGet(this, _Tab_updateChildrenElement, "f").call(this);
     }
     // NOTE: PUBLIC Methods
     get element() {
@@ -1565,7 +1579,7 @@ class Tab {
         return __classPrivateFieldGet(this, _Tab_element, "f");
     }
 }
-_Tab_element = new WeakMap(), _Tab_spacerEl = new WeakMap(), _Tab_titleEl = new WeakMap(), _Tab_childrenEl = new WeakMap(), _Tab_children = new WeakMap(), _Tab_childrenLast = new WeakMap(), _Tab_updateElement = new WeakMap();
+_Tab_element = new WeakMap(), _Tab_wrapperEl = new WeakMap(), _Tab_spacerEl = new WeakMap(), _Tab_titleEl = new WeakMap(), _Tab_childrenEl = new WeakMap(), _Tab_children = new WeakMap(), _Tab_childrenLast = new WeakMap(), _Tab_updateElement = new WeakMap(), _Tab_updateChildrenElement = new WeakMap(), _Tab_updateTitleElement = new WeakMap(), _Tab_updated = new WeakMap();
 let TABS = new TabMap();
 
 },{"webextension-polyfill":1}]},{},[2]);

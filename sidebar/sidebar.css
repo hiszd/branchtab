@@ -34,8 +34,8 @@ body {
   padding: 0;
 }
 
-.tab {
-  cursor: clickable;
+#sidebar > .tab {
+  cursor: pointer;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -44,6 +44,30 @@ body {
   border-style: solid;
   border-width: 1px 0 0 0;
   border-color: hsla(0, 0%, 30%, 1);
+}
+
+#sidebar > .tab:last-child {
+  border-bottom: 1px solid #505050;
+}
+
+.tab.active {
+  background-color: hsla(0, 0%, 38%, 1);
+}
+
+.children > .tab {
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0.4rem 0 0.4rem 0.5rem;
+  margin: none;
+  border-style: solid;
+  border-width: 1px 0 0 0;
+  border-color: hsla(0, 0%, 30%, 1);
+}
+
+div.tab div.children:has(> .tab) {
+  margin-top: 0.4rem;
 }
 
 .label {
@@ -58,12 +82,4 @@ body {
 
 .label.haschild {
   margin-bottom: 0.5rem;
-}
-
-.tab.active {
-  background-color: hsla(0, 0%, 38%, 1);
-}
-
-.tab:last-child {
-  border-bottom: 1px solid #505050;
 }

@@ -181,6 +181,7 @@ class Tab {
   parentId: number | undefined;
   activeTab: { id: number, title: string } | undefined;
   #element: HTMLDivElement = document.createElement('div');
+  #wrapperEl: HTMLDivElement = document.createElement('div');
   #spacerEl: HTMLDivElement = document.createElement('div');
   #titleEl: HTMLDivElement = document.createElement('div');
   #childrenEl: HTMLDivElement = document.createElement('div');
@@ -191,12 +192,13 @@ class Tab {
     this.title = title;
     this.parentId = parentId || undefined;
     TABS.winId().then(winId_local => {
-      browser.tabs.onUpdated.addListener(this.#updateElement, { tabId: this.id, windowId: winId_local, properties: ['title'] });
+      browser.tabs.onUpdated.addListener(this.#updated, { tabId: this.id, windowId: winId_local, properties: ['title'] });
     });
     this.#updateElement();
+    this.#updateTitleElement();
+    this.#updateChildrenElement();
   }
   // NOTE: PRIVATE Methods
-  // WARN: this updates the whole element as of now. Might change to seperate update methods for title, children, etc.
   #updateElement = () => {
     console.log("Tab#updateElement", this.id);
     this.#element.innerHTML = "";
@@ -207,34 +209,38 @@ class Tab {
       console.log(this.id, (this.#children.length > 0) ? ("has children: " + this.#children) : "does not have children");
       // browser.tabs.update(this.id, { active: true });
     };
-    let wrapper = document.createElement('div');
-    wrapper.classList.add('labelwrapper');
+    this.#wrapperEl.classList.add('labelwrapper');
 
     let spcrcontents = document.querySelector('#arrow')?.innerHTML;
     this.#spacerEl.classList.add('spacer');
     this.#spacerEl.innerHTML = spcrcontents!;
 
-    this.#titleEl.classList.add('label');
-    this.#titleEl.textContent = this.title;
+    if (this.parentId) {
+      this.#wrapperEl.appendChild(this.#spacerEl);
+    }
+    this.#wrapperEl.appendChild(this.#titleEl);
 
+    this.#element.appendChild(this.#wrapperEl);
+    this.#element.appendChild(this.#childrenEl);
+  }
+  #updateChildrenElement = () => {
     this.#childrenEl.classList.add('children');
     if (this.#children !== this.#childrenLast) {
-      this.#children.forEach((e) => {
-        if (TABS.has(e)) {
-          this.#childrenEl.appendChild(TABS.get(e)!.element);
-        }
-      });
-      this.#childrenLast = this.#children;
+      console.log("new children", this.#children, this.#childrenLast);
     } else {
       console.log("same children", this.#children, this.#childrenLast);
     }
-
-    if (this.parentId) {
-      wrapper.appendChild(this.#spacerEl);
-    }
-    wrapper.appendChild(this.#titleEl);
-    this.#element.appendChild(wrapper);
-    this.#element.appendChild(this.#childrenEl);
+    this.#children.forEach((e) => {
+      let tab = TABS.get(e);
+      if (tab) {
+        this.#childrenEl.appendChild(tab.element);
+      }
+    });
+    this.#childrenLast = this.#children;
+  }
+  #updateTitleElement = () => {
+    this.#titleEl.classList.add('label');
+    this.#titleEl.textContent = this.title;
   }
   // NOTE: PUBLIC Methods
   get element() {
@@ -250,12 +256,12 @@ class Tab {
   }
   addChild = (tabId: number) => {
     this.#children.push(tabId);
-    this.#updateElement();
+    this.#updateChildrenElement();
     console.log("Added child: ", tabId, "to", this.id);
   }
   removeChild = (tabId: number) => {
     this.#children = this.#children.filter((e) => e !== tabId);
-    this.#updateElement();
+    this.#updateChildrenElement();
     console.log("Removed child: ", tabId, "from", this.id);
   }
   getChild = (id: number) => {
@@ -266,6 +272,13 @@ class Tab {
       this.#element.classList.add('active');
     } else {
       this.#element.classList.remove('active');
+    }
+  }
+  // NOTE: Listeners
+  #updated = (tabId: number, changeInfo: browser.Tabs.OnUpdatedChangeInfoType, tab: browser.Tabs.Tab) => {
+    if (changeInfo.title) {
+      this.title = tab.title!;
+      this.#updateTitleElement();
     }
   }
 }
