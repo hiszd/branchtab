@@ -152,6 +152,7 @@ class TabMap {
     this.#tabs.set(tab.id, tab);
     const newtabbehavior = await browser.storage.local.get('newtabbehavior');
     console.log("start", "activeTab: ", this.activeTab, "lastActiveTab: ", this.#lastActiveTab);
+    // FIXME: need to figure out why the tabs aren't getting added as children
     if (tab.parentId === undefined) {
       let activeTab: Tab | undefined;
       if (this.activeTab && this.activeTab.id === tab.id) {
