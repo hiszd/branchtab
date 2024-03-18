@@ -1294,21 +1294,21 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-var _TabMap_tabs, _TabMap_storageKey, _TabMap_activeTab, _TabMap_lastActiveTab, _TabMap_element, _TabMap_updateCache, _TabMap_getCache, _TabMap_initUI, _Tab_element, _Tab_wrapperEl, _Tab_spacerEl, _Tab_titleEl, _Tab_childrenEl, _Tab_children, _Tab_childrenLast, _Tab_updateElement, _Tab_updateChildrenElement, _Tab_updateTitleElement, _Tab_updated;
+var _TabMap_tabs, _TabMap_storageKey, _TabMap_activeTab, _TabMap_lastActiveTab, _TabMap_element, _TabMap_retrieveTabs, _TabMap_updateCache, _TabMap_getCache, _TabMap_initUI, _TabMap_onUpdated, _Tab_element, _Tab_wrapperEl, _Tab_spacerEl, _Tab_titleEl, _Tab_childrenEl, _Tab_children, _Tab_childrenLast, _Tab_updateElement, _Tab_updateChildrenElement, _Tab_updateTitleElement, _Tab_updated;
 Object.defineProperty(exports, "__esModule", { value: true });
 const webextension_polyfill_1 = __importDefault(require("webextension-polyfill"));
 let hasInit = false;
 document.addEventListener('DOMContentLoaded', () => __awaiter(void 0, void 0, void 0, function* () {
     console.log("sidebar init");
     // NOTE: just for testing
-    const b = yield webextension_polyfill_1.default.tabs.query({ url: webextension_polyfill_1.default.runtime.getURL("sidebar/sidebar.html") });
-    if (b.length <= 0) {
-        webextension_polyfill_1.default.tabs.create({ url: webextension_polyfill_1.default.runtime.getURL("sidebar/sidebar.html") });
-    }
-    const o = yield webextension_polyfill_1.default.tabs.query({ url: webextension_polyfill_1.default.runtime.getURL("options/options.html") });
-    if (o.length <= 0) {
-        webextension_polyfill_1.default.tabs.create({ url: webextension_polyfill_1.default.runtime.getURL("options/options.html") });
-    }
+    // const b = await browser.tabs.query({ url: browser.runtime.getURL("sidebar/sidebar.html") })
+    // if (b.length <= 0) {
+    //   browser.tabs.create({ url: browser.runtime.getURL("sidebar/sidebar.html") });
+    // }
+    // const o = await browser.tabs.query({ url: browser.runtime.getURL("options/options.html") })
+    // if (o.length <= 0) {
+    //   browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
+    // }
     if (!hasInit) {
         webextension_polyfill_1.default.tabs.onActivated.addListener(TABS.activated);
         webextension_polyfill_1.default.tabs.onCreated.addListener(TABS.created);
@@ -1317,15 +1317,70 @@ document.addEventListener('DOMContentLoaded', () => __awaiter(void 0, void 0, vo
     }
 }));
 class TabMap {
-    // TODO: the cache needs to be loaded, compared with existing tabs, set parents of these tabs, THEN render the UI
+    // TODO: WIP the cache needs to be loaded, compared with existing tabs, set parents of these tabs, THEN render the UI
     constructor() {
         _TabMap_tabs.set(this, new Map());
         _TabMap_storageKey.set(this, '');
         _TabMap_activeTab.set(this, void 0);
         _TabMap_lastActiveTab.set(this, void 0);
         _TabMap_element.set(this, document.querySelector('#sidebar'));
-        this.winId = webextension_polyfill_1.default.windows.WINDOW_ID_CURRENT;
         // NOTE: PRIVATE Methods
+        // WARN: might need to setup queues for tab updates, or adding, removing, etc.
+        _TabMap_retrieveTabs.set(this, () => __awaiter(this, void 0, void 0, function* () {
+            const winDat = yield webextension_polyfill_1.default.windows.getCurrent({ populate: true });
+            const cache = yield __classPrivateFieldGet(this, _TabMap_getCache, "f").call(this);
+            const tabs = winDat.tabs;
+            let rtrn = [];
+            if (__classPrivateFieldGet(this, _TabMap_tabs, "f").size > 0) {
+                console.error("tabs already exist, not retrieving tabs.");
+                return undefined;
+            }
+            cache === null || cache === void 0 ? void 0 : cache.forEach(tab => {
+                const ft = tabs.find(t => t.url === tab.url);
+                if (ft) {
+                    if (!tab.parentUrl) {
+                        const tb = new Tab(ft.id, ft.title, ft.url, undefined);
+                        if (ft.active) {
+                            tb.changeActive(true);
+                            this.activeTab = {
+                                id: tb.id,
+                                title: tb.title,
+                            };
+                        }
+                        rtrn.push(tb);
+                    }
+                    else {
+                        let parent = tabs.find(t => t.url === tab.parentUrl);
+                        if (parent) {
+                            const tb = new Tab(ft.id, ft.title, ft.url, parent.id);
+                            if (ft.active) {
+                                tb.changeActive(true);
+                                this.activeTab = {
+                                    id: tb.id,
+                                    title: tb.title,
+                                };
+                            }
+                            rtrn.push(tb);
+                        }
+                    }
+                }
+            });
+            tabs.forEach(tab => {
+                const ft = rtrn.find(t => t.url === tab.url);
+                if (!ft) {
+                    const tb = new Tab(tab.id, tab.title, tab.url, undefined);
+                    if (tab.active) {
+                        tb.changeActive(true);
+                        this.activeTab = {
+                            id: tb.id,
+                            title: tb.title,
+                        };
+                    }
+                    rtrn.push(tb);
+                }
+            });
+            return rtrn;
+        }));
         _TabMap_updateCache.set(this, () => {
             let tabEssences = [];
             for (const value of __classPrivateFieldGet(this, _TabMap_tabs, "f").values()) {
@@ -1358,6 +1413,11 @@ class TabMap {
                 }
                 __classPrivateFieldGet(this, _TabMap_element, "f").appendChild(tab.element);
             });
+        });
+        _TabMap_onUpdated.set(this, (tabId, changeInfo, tab) => {
+            if (__classPrivateFieldGet(this, _TabMap_tabs, "f").has(tabId)) {
+                __classPrivateFieldGet(this, _TabMap_updateCache, "f").call(this);
+            }
         }
         // NOTE: PUBLIC Methods
         );
@@ -1365,30 +1425,44 @@ class TabMap {
         this.add = (tab) => __awaiter(this, void 0, void 0, function* () {
             __classPrivateFieldGet(this, _TabMap_tabs, "f").set(tab.id, tab);
             const newtabbehavior = yield webextension_polyfill_1.default.storage.local.get('newtabbehavior');
+            console.log("start", "activeTab: ", this.activeTab, "lastActiveTab: ", __classPrivateFieldGet(this, _TabMap_lastActiveTab, "f"));
             let activeTab;
-            if (this.activeTab && this.activeTab.id === tab.id) {
-                if (__classPrivateFieldGet(this, _TabMap_lastActiveTab, "f")) {
-                    activeTab = this.get(__classPrivateFieldGet(this, _TabMap_lastActiveTab, "f").id);
+            if (tab.parentId !== undefined) {
+                if (this.activeTab && this.activeTab.id === tab.id) {
+                    if (__classPrivateFieldGet(this, _TabMap_lastActiveTab, "f")) {
+                        activeTab = this.get(__classPrivateFieldGet(this, _TabMap_lastActiveTab, "f").id);
+                    }
+                    else {
+                        console.log("early return 1");
+                        return;
+                    }
                 }
                 else {
-                    return;
+                    if (this.activeTab) {
+                        activeTab = this.get(this.activeTab.id);
+                    }
+                    else {
+                        if (tab.isActive) {
+                            activeTab = undefined;
+                            this.activeTab = {
+                                id: tab.id,
+                                title: tab.title,
+                            };
+                        }
+                        else {
+                            console.log("early return 2");
+                            return;
+                        }
+                    }
                 }
-            }
-            else {
-                if (this.activeTab) {
-                    activeTab = this.get(this.activeTab.id);
+                switch (newtabbehavior['newtabbehavior']) {
+                    case "0":
+                        tab.parentId = activeTab === null || activeTab === void 0 ? void 0 : activeTab.id;
+                        break;
+                    case "1":
+                        tab.parentId = activeTab === null || activeTab === void 0 ? void 0 : activeTab.parentId;
+                        break;
                 }
-                else {
-                    return;
-                }
-            }
-            switch (newtabbehavior['newtabbehavior']) {
-                case "0":
-                    tab.parentId = activeTab.id;
-                    break;
-                case "1":
-                    tab.parentId = activeTab.parentId;
-                    break;
             }
             if (tab.parentId !== undefined) {
                 const parent = this.get(tab.parentId);
@@ -1400,6 +1474,7 @@ class TabMap {
                 __classPrivateFieldGet(this, _TabMap_tabs, "f").set(tab.id, tab);
                 console.log("added", tab.id, "to root");
             }
+            console.log("end", "activeTab: ", this.activeTab, "lastActiveTab: ", __classPrivateFieldGet(this, _TabMap_lastActiveTab, "f"));
             __classPrivateFieldGet(this, _TabMap_updateCache, "f").call(this);
         });
         this.remove = (id) => {
@@ -1416,14 +1491,19 @@ class TabMap {
         };
         // NOTE: listener callbacks
         this.created = (tab) => __awaiter(this, void 0, void 0, function* () {
-            const tb = new Tab(tab.id, tab.title);
+            const tb = new Tab(tab.id, tab.title, tab.url);
             if (tab.active) {
+                console.log("active tab created", tab);
                 tb.changeActive(true);
                 yield this.add(tb);
                 this.activeTab = {
                     id: tab.id,
                     title: tab.title,
                 };
+            }
+            else {
+                console.log("normal tab created", tab);
+                this.add(tb);
             }
         });
         this.removed = (tabId, removeInfo) => {
@@ -1436,47 +1516,25 @@ class TabMap {
         this.activated = (activeInfo) => {
             if (activeInfo.tabId) {
                 const tab = this.get(activeInfo.tabId);
-                this.activeTab = {
-                    id: tab.id,
-                    title: tab.title,
-                };
-            }
-        };
-        __classPrivateFieldSet(this, _TabMap_storageKey, "tabs-" + this.winId.toString(), "f");
-        __classPrivateFieldGet(this, _TabMap_getCache, "f").call(this).then(e => {
-            webextension_polyfill_1.default.tabs.query({ active: true, currentWindow: true }).then(r => {
-                if (r.length > 0) {
+                if (tab) {
                     this.activeTab = {
-                        id: r[0].id,
-                        title: r[0].title,
+                        id: tab.id,
+                        title: tab.title,
                     };
                 }
-            });
-            if (e) {
-                e.forEach((tab) => {
-                    let tb = webextension_polyfill_1.default.tabs.get(tab.id).then(t => {
-                        this.add(new Tab(t.id, t.title, tab.parentId));
-                    });
-                });
-                __classPrivateFieldGet(this, _TabMap_updateCache, "f").call(this);
-                __classPrivateFieldGet(this, _TabMap_initUI, "f").call(this);
             }
-            else {
-                webextension_polyfill_1.default.windows.getCurrent({ populate: true }).then((win) => {
-                    win.tabs.forEach((tab) => {
-                        const tb = new Tab(tab.id, tab.title);
-                        if (tab.active) {
-                            this.activeTab = {
-                                id: tab.id,
-                                title: tab.title,
-                            };
-                            tb.changeActive(true);
-                        }
-                        __classPrivateFieldGet(this, _TabMap_tabs, "f").set(tab.id, tb);
-                    });
-                    __classPrivateFieldGet(this, _TabMap_updateCache, "f").call(this);
-                    __classPrivateFieldGet(this, _TabMap_initUI, "f").call(this);
+        };
+        webextension_polyfill_1.default.windows.getCurrent().then(w => {
+            this.winId = w.id;
+            __classPrivateFieldSet(this, _TabMap_storageKey, "tabs-" + w.id, "f");
+            webextension_polyfill_1.default.tabs.onUpdated.addListener(__classPrivateFieldGet(this, _TabMap_onUpdated, "f"), { windowId: this.winId });
+        });
+        __classPrivateFieldGet(this, _TabMap_retrieveTabs, "f").call(this).then(e => {
+            if (e) {
+                e.forEach(t => {
+                    TABS.add(t);
                 });
+                __classPrivateFieldGet(this, _TabMap_initUI, "f").call(this);
             }
         });
     }
@@ -1511,9 +1569,9 @@ class TabMap {
         }
     }
 }
-_TabMap_tabs = new WeakMap(), _TabMap_storageKey = new WeakMap(), _TabMap_activeTab = new WeakMap(), _TabMap_lastActiveTab = new WeakMap(), _TabMap_element = new WeakMap(), _TabMap_updateCache = new WeakMap(), _TabMap_getCache = new WeakMap(), _TabMap_initUI = new WeakMap();
+_TabMap_tabs = new WeakMap(), _TabMap_storageKey = new WeakMap(), _TabMap_activeTab = new WeakMap(), _TabMap_lastActiveTab = new WeakMap(), _TabMap_element = new WeakMap(), _TabMap_retrieveTabs = new WeakMap(), _TabMap_updateCache = new WeakMap(), _TabMap_getCache = new WeakMap(), _TabMap_initUI = new WeakMap(), _TabMap_onUpdated = new WeakMap();
 class Tab {
-    constructor(id, title, parentId) {
+    constructor(id, title, url, parentId) {
         _Tab_element.set(this, document.createElement('div'));
         _Tab_wrapperEl.set(this, document.createElement('div'));
         _Tab_spacerEl.set(this, document.createElement('div'));
@@ -1521,6 +1579,7 @@ class Tab {
         _Tab_childrenEl.set(this, document.createElement('div'));
         _Tab_children.set(this, []);
         _Tab_childrenLast.set(this, []);
+        this.isActive = false;
         // NOTE: PRIVATE Methods
         _Tab_updateElement.set(this, () => {
             var _a;
@@ -1545,10 +1604,6 @@ class Tab {
         _Tab_updateChildrenElement.set(this, () => {
             __classPrivateFieldGet(this, _Tab_childrenEl, "f").classList.add('children');
             if (__classPrivateFieldGet(this, _Tab_children, "f") !== __classPrivateFieldGet(this, _Tab_childrenLast, "f")) {
-                console.log("new children", __classPrivateFieldGet(this, _Tab_children, "f"), __classPrivateFieldGet(this, _Tab_childrenLast, "f"));
-            }
-            else {
-                console.log("same children", __classPrivateFieldGet(this, _Tab_children, "f"), __classPrivateFieldGet(this, _Tab_childrenLast, "f"));
             }
             __classPrivateFieldGet(this, _Tab_children, "f").forEach((e) => {
                 const tab = TABS.get(e);
@@ -1592,9 +1647,11 @@ class Tab {
         };
         this.changeActive = (b) => {
             if (b) {
+                this.isActive = true;
                 __classPrivateFieldGet(this, _Tab_element, "f").classList.add('active');
             }
             else {
+                this.isActive = false;
                 __classPrivateFieldGet(this, _Tab_element, "f").classList.remove('active');
             }
         };
@@ -1602,21 +1659,27 @@ class Tab {
             return {
                 id: this.id,
                 title: this.title,
-                parentId: this.parentId,
+                url: this.url,
+                parentUrl: this.parentId ? TABS.get(this.parentId).url : undefined,
             };
         };
         // NOTE: Listeners
         _Tab_updated.set(this, (tabId, changeInfo, tab) => {
-            if (tab.title) {
-                console.log("tab updated", tabId, tab.title);
+            if (changeInfo.title) {
+                console.log("tab updated", tabId, changeInfo.title);
                 this.title = tab.title;
                 __classPrivateFieldGet(this, _Tab_updateTitleElement, "f").call(this);
+            }
+            if (changeInfo.url) {
+                console.log("tab updated", tabId, changeInfo.url);
+                this.url = tab.url;
             }
         });
         this.id = id;
         this.title = title;
         this.parentId = parentId || undefined;
-        webextension_polyfill_1.default.tabs.onUpdated.addListener(__classPrivateFieldGet(this, _Tab_updated, "f"), { tabId: this.id, windowId: webextension_polyfill_1.default.windows.WINDOW_ID_CURRENT, properties: ["title"] });
+        this.url = url;
+        webextension_polyfill_1.default.tabs.onUpdated.addListener(__classPrivateFieldGet(this, _Tab_updated, "f"), { tabId: this.id, windowId: webextension_polyfill_1.default.windows.WINDOW_ID_CURRENT, properties: ["title", "url"] });
         __classPrivateFieldGet(this, _Tab_updateElement, "f").call(this);
         __classPrivateFieldGet(this, _Tab_updateTitleElement, "f").call(this);
         __classPrivateFieldGet(this, _Tab_updateChildrenElement, "f").call(this);
