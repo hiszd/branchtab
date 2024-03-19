@@ -1,5 +1,5 @@
 #!/bin/sh
 
-selected_dir=$(find $HOME/.floorp/ -mindepth 1 -maxdepth 1 -type d | fzf)
+selected_dir=$(find $HOME/.mozilla/firefox/ -mindepth 1 -maxdepth 1 -type d | fzf)
 
-npx web-ext run --firefox=$(which floorp) --keep-profile-changes --firefox-profile=$selected_dir
+npx web-ext run --devtools --verbose --firefox=$(which firefox) --keep-profile-changes --firefox-profile=$selected_dir
