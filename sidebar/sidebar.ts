@@ -64,8 +64,10 @@ class TabMap {
       console.error("tabs already exist, not retrieving tabs.");
       return undefined;
     }
+    // NOTE: for each cached tab
     cache?.forEach(tab => {
       const ft = tabs.find(t => t.url === tab.url);
+      // NOTE: see if the tab exists in the browser
       if (ft) {
         if (!tab.parentUrl) {
           const tb = new Tab(ft.id!, ft.title!, ft.url!, undefined);

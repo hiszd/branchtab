@@ -1335,8 +1335,10 @@ class TabMap {
                 console.error("tabs already exist, not retrieving tabs.");
                 return undefined;
             }
+            // NOTE: for each cached tab
             cache === null || cache === void 0 ? void 0 : cache.forEach(tab => {
                 const ft = tabs.find(t => t.url === tab.url);
+                // NOTE: see if the tab exists in the browser
                 if (ft) {
                     if (!tab.parentUrl) {
                         const tb = new Tab(ft.id, ft.title, ft.url, undefined);
@@ -1426,8 +1428,9 @@ class TabMap {
             __classPrivateFieldGet(this, _TabMap_tabs, "f").set(tab.id, tab);
             const newtabbehavior = yield webextension_polyfill_1.default.storage.local.get('newtabbehavior');
             console.log("start", "activeTab: ", this.activeTab, "lastActiveTab: ", __classPrivateFieldGet(this, _TabMap_lastActiveTab, "f"));
-            let activeTab;
-            if (tab.parentId !== undefined) {
+            // FIXME: need to figure out why the tabs aren't getting added as children
+            if (tab.parentId === undefined) {
+                let activeTab;
                 if (this.activeTab && this.activeTab.id === tab.id) {
                     if (__classPrivateFieldGet(this, _TabMap_lastActiveTab, "f")) {
                         activeTab = this.get(__classPrivateFieldGet(this, _TabMap_lastActiveTab, "f").id);
