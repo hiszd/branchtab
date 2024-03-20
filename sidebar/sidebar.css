@@ -48,7 +48,7 @@ body {
   padding: var(--pad) 0 var(--pad) 0.5rem;
   margin: none;
   background-color: hsla(0, 0%, 20%, 0.6);
-  border-radius: 0.4rem;
+  border-radius: 0.4rem 0 0 0.4rem;
   filter: drop-shadow(0 0 0.2rem hsla(0, 0%, 0%, 0.8));
 }
 

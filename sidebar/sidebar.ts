@@ -1,4 +1,4 @@
-import browser from "webextension-polyfill";
+import browser, { Tabs } from "webextension-polyfill";
 
 interface TabEssence {
   id: number;
@@ -26,6 +26,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     browser.tabs.onActivated.addListener(TABS.activated);
     browser.tabs.onCreated.addListener(TABS.created);
     browser.tabs.onRemoved.addListener(TABS.removed);
+
+    browser.storage.local.get(null).then(options => {
+      const newtabsearch = options["newtabsearch"];
+      const newtabbehavior = options["newtabbehavior"];
+      newtabsearch ? console.log("newtabsearch: " + newtabsearch) : browser.storage.local.set({ newtabsearch: "New Tab" });
+      newtabbehavior ? console.log("newtabbehavior: " + newtabbehavior) : browser.storage.local.set({ newtabbehavior: "0" });
+    });
+
     hasInit = true;
   }
 });
@@ -48,6 +56,14 @@ class TabMap {
       if (e) {
         e.forEach(t => {
           TABS.add(t);
+        });
+        e.forEach(t => {
+          if (t.parentId) {
+            const parent = TABS.get(t.parentId);
+            if (parent) {
+              parent.addChild(t.id);
+            }
+          }
         });
         this.#initUI();
       }
@@ -80,9 +96,11 @@ class TabMap {
           }
           rtrn.push(tb);
         } else {
-          let parent = tabs.find(t => t.url === tab.parentUrl);
+          const parent: Tab | undefined = rtrn.find(t => t.url === tab.parentUrl);
           if (parent) {
+            console.log("parent found: ", parent, "for tab: ", tab);
             const tb = new Tab(ft.id!, ft.title!, ft.url!, parent.id);
+            parent
             if (ft.active) {
               tb.changeActive(true);
               this.activeTab = {
@@ -91,6 +109,8 @@ class TabMap {
               }
             }
             rtrn.push(tb);
+          } else {
+            console.log("parent not found: ", parent, "for tab: ", tab);
           }
         }
       }
@@ -117,7 +137,7 @@ class TabMap {
       tabEssences.push(value.distillEssence());
     }
     const cache = { [this.#storageKey]: JSON.stringify(tabEssences) };
-    console.log("set cache: ", cache);
+    // console.log("set cache: ", cache);
     browser.storage.local.set(cache).catch(e => {
       console.error("cache error: ", e);
     });
@@ -134,12 +154,14 @@ class TabMap {
   #initUI = () => {
     this.#element.innerHTML = '';
     this.#tabs.forEach((tab) => {
-      if (tab.parentId !== undefined) {
+      if (tab.parentId) {
         const parent = this.#tabs.get(tab.parentId);
-        if (parent !== undefined) {
-          console.error("Parent not found: ", tab.id, parent.id);
+        if (parent) {
+          parent.addChild(tab.id);
+        } else {
+          console.error("Parent not found: ", tab.id, tab.parentId);
         }
-        parent!.addChild(tab.id);
+        return;
       }
       this.#element.appendChild(tab.element);
     });
@@ -153,7 +175,6 @@ class TabMap {
   add = async (tab: Tab) => {
     this.#tabs.set(tab.id, tab);
     const newtabbehavior = await browser.storage.local.get('newtabbehavior');
-    console.log("start", "activeTab: ", this.activeTab, "lastActiveTab: ", this.#lastActiveTab);
     // FIXME: need to figure out why the tabs aren't getting added as children
     if (tab.parentId === undefined) {
       let activeTab: Tab | undefined;
@@ -190,15 +211,18 @@ class TabMap {
       }
     }
     if (tab.parentId !== undefined) {
-      const parent = this.get(tab.parentId!)!;
-      parent.addChild(tab.id);
-      console.log("added", tab.id, "to", parent.id);
+      const parent = this.get(tab.parentId!);
+      if (parent) {
+        parent.addChild(tab.id);
+        console.log("added", tab.id, "to", parent.id);
+      } else {
+        console.error("Parent not found: ", tab.id, tab.parentId);
+      }
     } else {
       this.#element.appendChild(tab.element);
       this.#tabs.set(tab.id, tab);
       console.log("added", tab.id, "to root");
     }
-    console.log("end", "activeTab: ", this.activeTab, "lastActiveTab: ", this.#lastActiveTab);
     this.#updateCache();
   }
   remove = (id: number) => {
@@ -243,7 +267,11 @@ class TabMap {
   }
   // NOTE: listener callbacks
   created = async (tab: browser.Tabs.Tab) => {
-    const tb = new Tab(tab.id!, tab.title!, tab.url!);
+    // NOTE: tab.openerTabId is how we can know if this was opened from another tab
+    if (tab.openerTabId) {
+      console.log("openerTabId", tab.openerTabId, "id", tab.id, "title", tab.title);
+    }
+    const tb = new Tab(tab.id!, tab.title!, tab.url!, tab.openerTabId ? tab.openerTabId : undefined);
     if (tab.active) {
       console.log("active tab created", tab);
       tb.changeActive(true);
@@ -325,11 +353,10 @@ class Tab {
   }
   #updateChildrenElement = () => {
     this.#childrenEl.classList.add('children');
-    if (this.#children !== this.#childrenLast) {
-    }
     this.#children.forEach((e) => {
       const tab = TABS.get(e);
       if (tab) {
+        console.log("Added child element: ", e, "to", this.id);
         this.#childrenEl.appendChild(tab.element);
       }
     });
@@ -350,11 +377,16 @@ class Tab {
     }
     this.#updateElement();
   }
+  changeParent = (id: number) => {
+    this.parentId = id;
+    this.#updateElement();
+  }
   addChild = (tabId: number) => {
     if (this.#children.includes(tabId)) {
       return;
     }
     this.#children.push(tabId);
+    TABS.get(tabId)!.changeParent(this.id);
     this.#updateChildrenElement();
     console.log("Added child: ", tabId, "to", this.id);
   }
